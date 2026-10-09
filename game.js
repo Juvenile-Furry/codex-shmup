@@ -4,7 +4,7 @@
 
   const TAU = Math.PI * 2;
   const TARGET = 10000;
-  const BASE_SPEED = 2;
+  const BASE_SPEED = 3;
   const WIDTH = 480;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const random = (low, high) => low + Math.random() * (high - low);
@@ -87,6 +87,7 @@
       this.shake = 0;
       this.flash = 0;
       this.bombPulse = 0;
+      this.impact = 0;
       this.player = { x: WIDTH / 2, y: this.height * 0.82, r: 8, bank: 0 };
       this.enemies.length = 0;
       this.bullets.length = 0;
@@ -144,7 +145,8 @@
       if (this.status !== 'playing' || this.bombs <= 0) return false;
       this.bombs--;
       this.bombPulse = 1;
-      this.shake = 9;
+      this.shake = 18;
+      this.impact = 1;
       this.enemyBullets.length = 0;
       this.invulnerability = Math.max(this.invulnerability, 1.1);
       const targets = this.enemies.slice();
@@ -410,7 +412,7 @@
       this.comboTimer = 2.8;
       this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.min(4, Math.floor(this.combo / 25)));
       this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
-      this.shake = Math.min(12, this.shake + (enemy.type === 2 ? 4 : 1.4));
+      this.shake = Math.min(24, this.shake + (enemy.type === 2 ? 8 : 2.8));
       if (this.rings.length < 96) this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
       if (this.combo % 25 === 0 && this.popups.length < 24) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
       if (!fromBomb) this._tone('hit');
@@ -437,7 +439,7 @@
       this.invulnerability = 2.2;
       this.combo = 0;
       this.comboTimer = 0;
-      this.shake = 7;
+      this.shake = 14;
       this.flash = 0.16;
       this._sparks(this.player.x, this.player.y, COLORS.white, 24, 160);
       this._tone('damage');
@@ -465,17 +467,19 @@
     }
 
     _sparks(x, y, color, count, speed) {
-      const available = Math.max(0, 1200 - this.particles.length);
-      for (let i = 0; i < Math.min(count, available); i++) {
+      this.impact = Math.max(this.impact, Math.min(1, count / 24));
+      const available = Math.max(0, 2400 - this.particles.length);
+      for (let i = 0; i < Math.min(count * 2, available); i++) {
         const angle = random(0, TAU);
-        const velocity = random(speed * 0.25, speed);
+        const velocity = random(speed * 0.5, speed * 2);
         const life = random(0.3, 0.85);
         this.particles.push({ x, y, vx: Math.cos(angle) * velocity, vy: Math.sin(angle) * velocity, life, maxLife: life, size: random(1.3, 3.7), color });
       }
     }
 
     _updateEffects(dt) {
-      this.shake = Math.max(0, this.shake - dt * 24);
+      this.shake = Math.max(0, this.shake - dt * 48);
+      this.impact = Math.max(0, this.impact - dt * 2.5);
       this.flash = Math.max(0, this.flash - dt);
       this.bombPulse = Math.max(0, this.bombPulse - dt * 0.75);
       for (const particle of this.particles) {
@@ -486,7 +490,7 @@
         particle.life -= dt;
       }
       this.particles = this.particles.filter(particle => particle.life > 0);
-      for (const ring of this.rings) { ring.radius += dt * 105; ring.life -= dt; }
+      for (const ring of this.rings) { ring.radius += dt * 210; ring.life -= dt; }
       this.rings = this.rings.filter(ring => ring.life > 0);
       for (const popup of this.popups) { popup.y -= dt * 35; popup.life -= dt; }
       this.popups = this.popups.filter(popup => popup.life > 0);
@@ -514,8 +518,8 @@
       ctx.globalCompositeOperation = 'lighter';
       for (const ring of this.rings) {
         ctx.strokeStyle = ring.color;
-        ctx.globalAlpha = ring.life / ring.maxLife * 0.55;
-        ctx.lineWidth = 2 + ring.life * 7;
+        ctx.globalAlpha = Math.min(1, ring.life / ring.maxLife * 1.1);
+        ctx.lineWidth = 4 + ring.life * 14;
         ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius, 0, TAU); ctx.stroke();
         ctx.strokeStyle = COLORS.cyan;
         ctx.lineWidth = 2;
@@ -530,7 +534,7 @@
           ctx.lineTo(ring.x + Math.cos(angle) * ring.radius * 2, ring.y + Math.sin(angle) * ring.radius * 2);
         }
         ctx.stroke();
-        ctx.globalAlpha = ring.life / ring.maxLife * 0.12;
+        ctx.globalAlpha = ring.life / ring.maxLife * 0.24;
         ctx.fillStyle = ring.color;
         ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.6, 0, TAU); ctx.fill();
       }
@@ -554,11 +558,11 @@
       if (this.bombPulse > 0) {
         const progress = 1 - this.bombPulse;
         ctx.strokeStyle = COLORS.lime;
-        ctx.lineWidth = 3 + this.bombPulse * 7;
+        ctx.lineWidth = 6 + this.bombPulse * 14;
         ctx.globalAlpha = this.bombPulse * 0.7;
         ctx.beginPath(); ctx.arc(this.player.x, this.player.y, progress * Math.max(WIDTH, this.height) * 1.5, 0, TAU); ctx.stroke();
         ctx.fillStyle = COLORS.lime;
-        ctx.globalAlpha = this.bombPulse * 0.06;
+        ctx.globalAlpha = this.bombPulse * 0.12;
         ctx.fillRect(0, 0, WIDTH, this.height);
       }
       ctx.restore();
@@ -572,14 +576,24 @@
       this._drawChromaticAberration(ctx);
     }
 
+    _effectProfile() {
+      const quiet = this.status === 'ready' || this.status === 'paused';
+      const impact = quiet ? 0 : Math.max(this.impact, this.bombPulse);
+      if (this.reducedMotion) return { strength: 0.7, bloom: 0.025 + impact * 0.12, echo: 2 };
+      return {
+        strength: 0.8 + impact * (10 + Math.log2(this._pace()) * 2.8 + this.shake * 0.7 + this.bombPulse * 30),
+        bloom: 0.025 + impact * 0.335,
+        echo: 2 + impact * 12
+      };
+    }
+
     _drawChromaticAberration(ctx) {
       if (!this.sceneCtx || !this.channelCtx) return;
       const w = this.canvas.width, h = this.canvas.height;
       const scene = this.sceneCtx, channel = this.channelCtx;
       scene.globalCompositeOperation = 'copy';
       scene.drawImage(this.canvas, 0, 0);
-      const active = this.status === 'playing';
-      const strength = this.reducedMotion ? 3 : 5 + Math.log2(this._pace()) * 1.4 + (active ? this.shake * 0.7 + this.bombPulse * 15 : 0);
+      const { strength, bloom, echo } = this._effectProfile();
       const drift = this.reducedMotion ? 0 : Math.sin(this._visualTime * 2.3) * strength * 0.22;
       ctx.save();
       ctx.globalAlpha = 1;
@@ -592,8 +606,8 @@
         ctx.drawImage(this.channelCanvas, x, y, WIDTH, this.height);
       }
       // Oversized luminous echo adds bloom without a costly full-screen blur filter.
-      ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = active ? 0.18 : 0.08;
-      ctx.drawImage(this.sceneCanvas, -7, -7, WIDTH + 14, this.height + 14);
+      ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = bloom;
+      ctx.drawImage(this.sceneCanvas, -echo, -echo, WIDTH + echo * 2, this.height + echo * 2);
       ctx.restore();
     }
 

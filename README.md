@@ -46,10 +46,12 @@ All visual and audio assets are generated locally. The game makes no external re
 
 ## Overdrive mode
 
-The objective is 10,000 kills. Enemy travel, initial firing, and initial wave frequency run at twice the original speed: 164 units/sec for standard sector-one enemies, about 19 volleys/sec, and 1.96 formations/sec. Fire and wave rates then scale exponentially: `rate = 2 * originalRate * 2 ** (kills / 2000)`. The OVERDRIVE display reports progression relative to this new starting speed (1× to 32×). Volleys grow from three to eleven lanes. Nova recharge remains every 100 kills.
+The objective is 10,000 kills. Enemy travel, initial firing, and initial wave frequency run at three times the original speed (1.5× the previous release): 246 units/sec for standard sector-one enemies, about 28.6 volleys/sec, and 2.94 formations/sec. Fire and wave rates then scale exponentially: `rate = 3 * originalRate * 2 ** (kills / 2000)`. The OVERDRIVE display reports progression relative to this new starting speed (1× to 32×). Volleys grow from three to eleven lanes. Nova recharge remains every 100 kills.
 
 Visuals include strong full-field RGB channel separation, oversized bloom echoes, dual shockwaves, eight-ray impact bursts, horizontal lens flares, longer sparks, chain popups, and amplified camera shake. Color separation intensifies with overdrive, impacts, and nova bombs. Two reusable offscreen canvases avoid per-frame pixel readback. OS reduced-motion preferences disable camera shake and background acceleration and keep chromatic offsets static and smaller. HUD and controls remain outside the post-processing effect.
 
-Performance budgets: 480 enemies, 2,400 player bullets, 1,200 particles, and 96 explosion rings. Rate timers process multiple volleys per frame; horizontal collision buckets limit collision work. At extreme load the entity budgets take priority over spawn/firing rates.
+Performance budgets: 480 enemies, 2,400 player bullets, 2,400 particles, and 96 explosion rings. Rate timers process multiple volleys per frame; horizontal collision buckets limit collision work. At extreme load the entity budgets take priority over spawn/firing rates.
 
 Run regression checks with `node --test tests/game.test.cjs`.
+
+Idle and quiet-flight post-processing stays subtle (0.8-unit RGB separation, 2.5% bloom). Kills, hits and novas trigger a short impact envelope, with roughly double the previous event intensity: twice the sparks, spark velocity, shockwave expansion and camera shake, plus up to 36% bloom. The impact envelope settles in 0.4 seconds without new hits; nova waves fade over about 1.3 seconds. Pause suppresses post-processing intensity, and restarting clears the envelope.

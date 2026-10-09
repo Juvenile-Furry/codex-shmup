@@ -262,7 +262,7 @@ test('restarting resets mission, lives, ammunition, elapsed time, entities, and 
   h.window.emit('keydown', { key: 'w' });
   h.game.pause(); h.game.start();
   assert.deepEqual(json(h.game.snapshot()), { status: 'playing', kills: 0, target: 10000,
-    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 2 / 0.105, spawnRate: 2 / 1.02 });
+    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 3 / 0.105, spawnRate: 3 / 1.02 });
   assert.equal(h.game.enemies.length + h.game.bullets.length + h.game.enemyBullets.length, 0);
   assert.equal(h.game.keys.size, 0);
   assert.equal(h.game.pointer, null);
@@ -313,7 +313,7 @@ test('sectors change every 1000 kills; late-game load stays finite and within bu
     h.frame();
     assert(h.game.enemies.length <= 480);
     assert(h.game.bullets.length <= 2400);
-    assert(h.game.particles.length <= 1200);
+    assert(h.game.particles.length <= 2400);
     assert(h.game.rings.length <= 96);
     assert(h.game.enemies.every(e => Number.isFinite(e.x) && Number.isFinite(e.y)));
   }
@@ -330,20 +330,20 @@ test('a single remaining enemy slot never produces NaN coordinates', () => {
   h.game.destroy();
 });
 
-test('initial volleys, formation frequency and enemy travel are twice the original baseline', () => {
+test('initial volleys, formation frequency and enemy travel are three times the original baseline', () => {
   const h = setup(); h.game.start();
   let bullets = 0;
   for (let i = 0; i < 120; i++) {
     h.game.bullets.length = 0; h.frame(); bullets += h.game.bullets.length;
   }
-  assert(bullets / 3 >= 37 && bullets / 3 <= 40, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
-  assert.equal(h.game.wave, 4);
-  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 210 : 164)));
-  const e = enemy({ speed: 164 });
+  assert(bullets / 3 >= 56 && bullets / 3 <= 59, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
+  assert.equal(h.game.wave, 6);
+  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 315 : 246)));
+  const e = enemy({ speed: 246 });
   h.game.enemies = [e]; h.quiet();
   const y = e.y;
   for (let i = 0; i < 60; i++) h.frame();
-  assert(Math.abs(e.y - y - 164) < 0.01);
+  assert(Math.abs(e.y - y - 246) < 0.01);
   h.game.destroy();
 });
 
@@ -358,5 +358,28 @@ test('RGB compositor separates all three color channels on resized reusable surf
   assert(offsets[0] < 0 && offsets[1] === 0 && offsets[2] > 0);
   assert.equal(h.game.sceneCanvas.width, h.canvas.width);
   assert.equal(h.game.channelCanvas.height, h.canvas.height);
+  h.game.destroy();
+});
+
+test('idle effects are subtle, kills double the prior burst, and quiet flight settles back down', () => {
+  const h = setup();
+  assert(h.game._effectProfile().strength < 1);
+  assert(h.game._effectProfile().bloom < 0.03);
+  h.game.start(); h.quiet();
+  h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
+  assert.equal(h.game.particles.length, 120, 'previous standard kill emitted 60 sparks');
+  assert(h.game._effectProfile().strength > 11);
+  assert(h.game._effectProfile().bloom > 0.33);
+  for (let i = 0; i < 120; i++) h.frame();
+  assert(h.game._effectProfile().strength < 1);
+  assert.equal(h.game.particles.length, 0);
+  h.game.bomb();
+  assert(h.game._effectProfile().strength > 50);
+  h.game.pause();
+  assert(h.game._effectProfile().strength < 1);
+  h.game.start();
+  assert.equal(h.game.impact, 0);
+  h.game.reducedMotion = true; h.game.bomb();
+  assert(h.game._effectProfile().strength < 1);
   h.game.destroy();
 });
