@@ -4,14 +4,14 @@
 
   const TAU = Math.PI * 2;
   const TARGET = 10000;
-  const BASE_SPEED = 3;
+  const BASE_SPEED = 4.5;
   const WIDTH = 480;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const random = (low, high) => low + Math.random() * (high - low);
   const COLORS = { lime: '#d8fa78', coral: '#ff866c', cyan: '#6fdbe6', lilac: '#a7a2ff', white: '#e4f8ff' };
 
   class ShmupGame {
-    constructor({ canvas, onUpdate, onEvent } = {}) {
+    constructor({ canvas, onUpdate, onEvent, onEffects } = {}) {
       if (!canvas) throw new Error('ShmupGame requires a canvas.');
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d', { alpha: false });
@@ -23,6 +23,7 @@
       this.channelCtx = this.channelCanvas.getContext('2d');
       this.onUpdate = typeof onUpdate === 'function' ? onUpdate : () => {};
       this.onEvent = typeof onEvent === 'function' ? onEvent : () => {};
+      this.onEffects = typeof onEffects === 'function' ? onEffects : null;
       this.width = WIDTH;
       this.height = 720;
       this.status = 'ready';
@@ -62,6 +63,7 @@
         if (this.status === 'playing') this._update(dt);
         if (this.status !== 'paused') this._updateEffects(dt);
         this._draw();
+        if (this.onEffects) this.onEffects(this);
         this._uiTimer += dt;
         if (this._uiTimer >= 0.1) { this._uiTimer = 0; this._notify(); }
         this._rafId = requestAnimationFrame(this._loop);
@@ -77,6 +79,8 @@
       this.bombs = 3;
       this.sector = 1;
       this.elapsed = 0;
+      this.timeBoost = 0;
+      this.killBoost = 0;
       this.combo = 0;
       this.comboTimer = 0;
       this.wave = 0;
@@ -245,11 +249,12 @@
 
     _notify() { this.onUpdate(this.snapshot()); }
     _event(type, message) { this.onEvent({ type, message }); }
-    _pace() { return 2 ** (Math.min(TARGET, this.kills) / 2000); }
+    _pace() { return 1 + this.killBoost + this.timeBoost; }
 
     _update(dt) {
       if (this.status !== 'playing') return;
       this.elapsed += dt;
+      this.timeBoost += dt / 30;
       this.invulnerability = Math.max(0, this.invulnerability - dt);
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.combo = 0;
@@ -280,12 +285,14 @@
 
       for (const enemy of this.enemies) {
         if (enemy.dead) continue;
+        enemy.previousY = enemy.y;
         enemy.age += dt;
-        enemy.y += enemy.speed * dt;
+        enemy.y += enemy.speed * this._pace() * dt;
         enemy.x = clamp(enemy.baseX + Math.sin(enemy.age * enemy.swayRate + enemy.phase) * enemy.sway, 16, WIDTH - 16);
         enemy.hit = Math.max(0, enemy.hit - dt);
         if (enemy.y > this.height + 45) enemy.dead = true;
-        if (enemy.y > 0 && this._touches(enemy, this.player, enemy.r + this.player.r)) {
+        if (enemy.y > 0 && (this._touches(enemy, this.player, enemy.r + this.player.r) ||
+            (Math.abs(enemy.x - this.player.x) < enemy.r + this.player.r && enemy.previousY <= this.player.y && enemy.y >= this.player.y))) {
           this._damagePlayer();
           if (this.status !== 'playing') return;
           this._killEnemy(enemy, false);
@@ -408,9 +415,14 @@
       if (enemy.dead || this.status !== 'playing' || this.kills >= TARGET) return false;
       enemy.dead = true;
       this.kills++;
+      // Milestone differences are added to earned speed, never assigned as a cap.
+      if (this.kills % 1000 === 0) {
+        const level = this.kills / 1000;
+        this.killBoost += 2 ** (level / 2) - 2 ** ((level - 1) / 2);
+      }
       this.combo++;
       this.comboTimer = 2.8;
-      this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.min(4, Math.floor(this.combo / 25)));
+      this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.floor(this.combo / 25));
       this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
       this.shake = Math.min(24, this.shake + (enemy.type === 2 ? 8 : 2.8));
       if (this.rings.length < 96) this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
@@ -506,7 +518,7 @@
       ctx.fillRect(0, 0, WIDTH, this.height);
       this._drawBackground(ctx);
       ctx.save();
-      if (!this.reducedMotion && this.shake && this.status !== 'paused') ctx.translate(random(-this.shake, this.shake), random(-this.shake, this.shake));
+      if (!this.onEffects && !this.reducedMotion && this.shake && this.status !== 'paused') ctx.translate(random(-this.shake, this.shake), random(-this.shake, this.shake));
 
       if (this.status === 'ready') this._drawIdle(ctx);
       else {
@@ -573,7 +585,7 @@
         ctx.strokeRect(0, 0, WIDTH, this.height);
       }
       this._drawFrame(ctx);
-      this._drawChromaticAberration(ctx);
+      if (!this.onEffects) this._drawChromaticAberration(ctx);
     }
 
     _effectProfile() {

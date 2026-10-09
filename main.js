@@ -20,7 +20,8 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 2300);
   }
-  const game = new window.ShmupGame({ canvas, onUpdate: update, onEvent: event => toast(event.message) });
+  const screenEffects = new window.ScreenEffects(canvas);
+  const game = new window.ShmupGame({ canvas, onUpdate: update, onEvent: event => toast(event.message), onEffects: engine => screenEffects.draw(engine) });
 
   function update(state) {
     $('kill-count').textContent = String(state.kills).padStart(5, '0');

@@ -262,7 +262,7 @@ test('restarting resets mission, lives, ammunition, elapsed time, entities, and 
   h.window.emit('keydown', { key: 'w' });
   h.game.pause(); h.game.start();
   assert.deepEqual(json(h.game.snapshot()), { status: 'playing', kills: 0, target: 10000,
-    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 3 / 0.105, spawnRate: 3 / 1.02 });
+    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 4.5 / 0.105, spawnRate: 4.5 / 1.02 });
   assert.equal(h.game.enemies.length + h.game.bullets.length + h.game.enemyBullets.length, 0);
   assert.equal(h.game.keys.size, 0);
   assert.equal(h.game.pointer, null);
@@ -284,7 +284,7 @@ test('destroy cancels animation and unregisters input handlers', () => {
 test('actual firing and waves double every 2000 kills, including multiple volleys per frame', () => {
   const samples = [];
   for (const kills of [0, 2000, 4000, 8000, 9999]) {
-    const h = setup(); h.game.start(); h.game.kills = kills;
+    const h = setup(); h.game.start(); h.game.kills = kills; h.game.killBoost = 2 ** (Math.floor(kills / 1000) / 2) - 1;
     let bullets = 0, enemies = 0;
     for (let i = 0; i < 120; i++) {
       h.game.enemies.length = h.game.bullets.length = 0;
@@ -297,8 +297,8 @@ test('actual firing and waves double every 2000 kills, including multiple volley
   }
   assert(samples[1].volleys / samples[0].volleys > 1.8);
   assert(samples[2].volleys / samples[1].volleys > 1.8);
-  assert(samples[4].volleys / samples[0].volleys > 28);
-  assert(samples[4].enemies / samples[0].enemies > 25);
+  assert(samples[4].volleys / samples[0].volleys > 20);
+  assert(samples[4].enemies / samples[0].enemies > 18);
   assert(samples[4].volleys > 120, 'must fire multiple times in one frame');
 });
 
@@ -306,7 +306,7 @@ test('sectors change every 1000 kills; late-game load stays finite and within bu
   const h = setup(); h.game.start(); h.quiet(); h.game.kills = 999;
   h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
   assert.equal(h.game.sector, 2);
-  h.game.kills = 9000; h.game.sector = 10; h.game.spawnTimer = h.game.shotTimer = 0;
+  h.game.kills = 9000; h.game.killBoost = 2 ** 4.5 - 1; h.game.sector = 10; h.game.spawnTimer = h.game.shotTimer = 0;
   h.game.invulnerability = 100;
   for (let i = 0; i < 900 && h.game.status === 'playing'; i++) {
     h.game.player.x = 240 + Math.sin(i / 45) * 195;
@@ -330,20 +330,21 @@ test('a single remaining enemy slot never produces NaN coordinates', () => {
   h.game.destroy();
 });
 
-test('initial volleys, formation frequency and enemy travel are three times the original baseline', () => {
+test('initial volleys, formation frequency and enemy travel are 4.5 times the original baseline with continuous time acceleration', () => {
   const h = setup(); h.game.start();
   let bullets = 0;
   for (let i = 0; i < 120; i++) {
-    h.game.bullets.length = 0; h.frame(); bullets += h.game.bullets.length;
+    h.game.bullets.length = 0; h.game.enemies.length = 0; h.frame(); bullets += h.game.bullets.length;
   }
-  assert(bullets / 3 >= 56 && bullets / 3 <= 59, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
-  assert.equal(h.game.wave, 6);
-  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 315 : 246)));
-  const e = enemy({ speed: 246 });
+  assert(bullets / 3 >= 87 && bullets / 3 <= 91, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
+  assert.equal(h.game.wave, 9);
+  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 472.5 : 369)));
+  const e = enemy({ speed: 369 });
   h.game.enemies = [e]; h.quiet();
+  h.game.timeBoost = 0;
   const y = e.y;
   for (let i = 0; i < 60; i++) h.frame();
-  assert(Math.abs(e.y - y - 246) < 0.01);
+  assert(e.y - y > 375 && e.y - y < 376);
   h.game.destroy();
 });
 
@@ -381,5 +382,37 @@ test('idle effects are subtle, kills double the prior burst, and quiet flight se
   assert.equal(h.game.impact, 0);
   h.game.reducedMotion = true; h.game.bomb();
   assert(h.game._effectProfile().strength < 1);
+  h.game.destroy();
+});
+
+test('time adds 1x every 30 seconds, freezes on pause and resets on restart', () => {
+  const h = setup(); h.game.start(); h.quiet();
+  for (let i = 0; i < 1800; i++) h.game._update(1 / 60);
+  assert(Math.abs(h.game._pace() - 2) < 1e-9);
+  h.game.pause();
+  for (let i = 0; i < 300; i++) h.game._update(1 / 60);
+  assert(Math.abs(h.game._pace() - 2) < 1e-9);
+  h.game.start();
+  assert.equal(h.game._pace(), 1);
+  assert.equal(h.game.timeBoost, 0);
+  assert.equal(h.game.killBoost, 0);
+  h.game.destroy();
+});
+
+test('kill milestones add their differences to time-earned speed without a multiplier cap', () => {
+  const h = setup(); h.game.start(); h.game.timeBoost = 2;
+  h.game.kills = 999; h.game._killEnemy(enemy(), false);
+  assert(Math.abs(h.game._pace() - (3 + Math.SQRT2 - 1)) < 1e-9);
+  h.game.kills = 1999; h.game._killEnemy(enemy(), false);
+  assert(Math.abs(h.game._pace() - 4) < 1e-9, '3x plus the combined +1x kill bonus must become 4x');
+  h.game.timeBoost = 40;
+  const before = h.game._pace();
+  h.game.kills = 2999; h.game._killEnemy(enemy(), false);
+  assert(h.game._pace() > 42);
+  assert(Math.abs(h.game._pace() - before - (2 ** 1.5 - 2)) < 1e-9);
+  h.game.combo = 224;
+  const score = h.game.score;
+  h.game._killEnemy(enemy(), false);
+  assert.equal(h.game.score - score, 1000, 'chain score multiplier continues past the old 5x cap');
   h.game.destroy();
 });

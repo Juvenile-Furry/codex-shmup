@@ -39,19 +39,20 @@ Sound starts muted. Your personal best is saved in this browser when a run ends,
 - `styles.css`: desktop, phone, landscape, and reduced-motion layouts.
 - `game.js`: canvas rendering, controls, simulation, enemies, effects, and optional sound.
 - `main.js`: counters, overlays, controls, and local best record.
+- `screen-effects.js`: page-wide post-processing and viewport particle layer.
 - `icon.svg`: local icon.
 - `serve.mjs` / `start.cmd`: optional Node.js static server for phone testing.
 
-All visual and audio assets are generated locally. The game makes no external requests and has no third-party dependencies. The server exposes only the five browser assets. Stop it with Ctrl+C.
+All visual and audio assets are generated locally. The game makes no external requests and has no third-party dependencies. The server exposes only the browser assets. Stop it with Ctrl+C.
 
 ## Overdrive mode
 
-The objective is 10,000 kills. Enemy travel, initial firing, and initial wave frequency run at three times the original speed (1.5× the previous release): 246 units/sec for standard sector-one enemies, about 28.6 volleys/sec, and 2.94 formations/sec. Fire and wave rates then scale exponentially: `rate = 3 * originalRate * 2 ** (kills / 2000)`. The OVERDRIVE display reports progression relative to this new starting speed (1× to 32×). Volleys grow from three to eleven lanes. Nova recharge remains every 100 kills.
+Starting enemy travel, firing, and wave frequency are 4.5 times the original baseline (1.5 times the previous release): standard sector-one enemies start at 369 units/sec, firing at 42.86 volleys/sec, and formations at 4.41/sec.
 
-Visuals include strong full-field RGB channel separation, oversized bloom echoes, dual shockwaves, eight-ray impact bursts, horizontal lens flares, longer sparks, chain popups, and amplified camera shake. Color separation intensifies with overdrive, impacts, and nova bombs. Two reusable offscreen canvases avoid per-frame pixel readback. OS reduced-motion preferences disable camera shake and background acceleration and keep chromatic offsets static and smaller. HUD and controls remain outside the post-processing effect.
+Speed starts at 1x, gains +1x per 30 seconds of active play, and receives additive kill bonuses every 1,000 kills. Milestone n adds 2^(n/2) - 2^((n-1)/2). Thus the first two milestones add a total +1x, the next two add +2x, and so on; these additions preserve all speed already earned from time. The multiplier has no upper clamp. Enemy movement, firing, and waves all use the combined multiplier. Pause and switching apps freeze the clock; restart resets all bonuses. The score chain multiplier also has no upper cap. The mission still ends at exactly 10,000 kills.
 
-Performance budgets: 480 enemies, 2,400 player bullets, 2,400 particles, and 96 explosion rings. Rate timers process multiple volleys per frame; horizontal collision buckets limit collision work. At extreme load the entity budgets take priority over spawn/firing rates.
+Page-wide RGB separation, bloom and shake affect the entire interface. A fixed viewport overlay lets blast rings, flares, sparks and nova waves spill beyond the game canvas. Quiet flight stays subtle; impacts trigger the stronger effects. Reduced-motion settings suppress camera shake and moving chromatic offsets.
 
-Run regression checks with `node --test tests/game.test.cjs`.
+Performance budgets remain separate from the uncapped multiplier: 480 enemies, 2,400 player bullets, 2,400 particles, and 96 explosion rings. These protect rendering at extreme rates. Actual emission can be lower than the nominal rate when a budget is full. Touch controls remain usable through the pointer-transparent effects overlay.
 
-Idle and quiet-flight post-processing stays subtle (0.8-unit RGB separation, 2.5% bloom). Kills, hits and novas trigger a short impact envelope, with roughly double the previous event intensity: twice the sparks, spark velocity, shockwave expansion and camera shake, plus up to 36% bloom. The impact envelope settles in 0.4 seconds without new hits; nova waves fade over about 1.3 seconds. Pause suppresses post-processing intensity, and restarting clears the envelope.
+Run regression checks with `node --test tests/game.test.cjs`. Restart the local server after updating its asset list.

@@ -10,3 +10,6 @@
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}.primary-button:hover{transform:none}}
 
 .hud-overdrive{font-size:8px;letter-spacing:1px;color:#d8fa78;margin-top:10px}.hud-overdrive span{margin-left:6px;color:#e9ffe0}
+html { overflow-x: clip; }
+.app-shell { filter: url(#screen-impact); }
+#screen-effects { position:fixed; inset:0; width:100vw; height:100dvh; z-index:30; pointer-events:none; filter:url(#screen-impact); }
