@@ -1,0 +1,53 @@
+# THOUSAND
+
+A responsive, dependency-free arcade shoot ’em up. One ship, ten sectors, 10,000 enemy units to destroy.
+
+## Play on this computer
+
+Open `index.html` in a modern browser. No installation, build, account, or internet connection is needed.
+
+Alternatively, double-click `start.cmd` (Node.js required), then open **http://localhost:4173**. From a terminal:
+
+```powershell
+cd C:\Users\encor\shmup
+node serve.mjs
+```
+
+## Play on Android or iOS
+
+Run `start.cmd` on this computer. Connect your phone to the same Wi-Fi and enter the **Phone / same Wi-Fi** address printed in the terminal in Safari, Chrome, or another modern browser. If Windows Firewall prompts, allow Node.js on your private network. Keep the terminal open while playing. Public deployment is not needed for same-network play.
+
+The interface fits portrait and landscape screens, supports safe areas, and prevents page scrolling while dragging in the game field. The game pauses when you switch apps or tabs. Desktop mobile emulation is useful for checking layouts, but real-device browser behavior can differ.
+
+## Controls
+
+| Action | Touch / mouse | Keyboard |
+| --- | --- | --- |
+| Move | Drag anywhere in the game field | WASD / arrow keys |
+| Fire | Automatic | Automatic |
+| Nova bomb | NOVA button | Space |
+| Pause / resume | Pause button | P / Escape |
+| Sound | Speaker button | Tab to speaker button, Enter |
+
+Drag from below the ship to keep your finger out of the way. Movement is relative, so the ship will not jump to your finger. Nova bombs destroy enemies currently in the field and clear their shots. You begin with three and regain one every 100 kills (maximum three). Collect plus pickups to restore your five-point shield. Every 1,000 kills takes you into the next sector, and exactly 10,000 destroyed units completes the mission. If the shield runs out, try again.
+
+Sound starts muted. Your personal best is saved in this browser when a run ends, pauses, or the page closes; storage restrictions do not prevent play.
+
+## Files
+
+- `index.html`: responsive interface, instructions, and accessible buttons.
+- `styles.css`: desktop, phone, landscape, and reduced-motion layouts.
+- `game.js`: canvas rendering, controls, simulation, enemies, effects, and optional sound.
+- `main.js`: counters, overlays, controls, and local best record.
+- `icon.svg`: local icon.
+- `serve.mjs` / `start.cmd`: optional Node.js static server for phone testing.
+
+All visual and audio assets are generated locally. The game makes no external requests and has no third-party dependencies. The server exposes only the five browser assets. Stop it with Ctrl+C.
+
+## Overdrive mode
+
+The objective is 10,000 kills. Fire and wave rates scale exponentially: `multiplier = 2 ** (kills / 2000)`, from 1× to 32×. Volleys grow from three to eleven lanes. Nova recharge remains every 100 kills. Explosions use additive glow, shockwaves, streak particles, chain popups, and camera shake. OS reduced-motion preferences disable camera shake and background acceleration.
+
+Performance budgets: 480 enemies, 2,400 player bullets, 1,200 particles, and 96 explosion rings. Rate timers process multiple volleys per frame; horizontal collision buckets limit collision work. At extreme load the entity budgets take priority over spawn/firing rates.
+
+Run regression checks with `node --test tests/game.test.cjs`.
