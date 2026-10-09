@@ -80,6 +80,7 @@
       this.sector = 1;
       this.elapsed = 0;
       this.timeBoost = 0;
+      this.timeBoostTimer = 0;
       this.killBoost = 0;
       this.combo = 0;
       this.comboTimer = 0;
@@ -254,7 +255,11 @@
     _update(dt) {
       if (this.status !== 'playing') return;
       this.elapsed += dt;
-      this.timeBoost += dt / 30;
+      this.timeBoostTimer += dt;
+      while (this.timeBoostTimer >= 0.3) {
+        this.timeBoost += 0.01;
+        this.timeBoostTimer -= 0.3;
+      }
       this.invulnerability = Math.max(0, this.invulnerability - dt);
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.combo = 0;
@@ -272,7 +277,7 @@
         this._fire();
       }
       this.spawnTimer -= dt;
-      while (this.spawnTimer <= 0 && this.enemies.length < 480) {
+      while (this.spawnTimer <= 0) {
         this._spawnWave();
         this.spawnTimer += 1.02 / pace;
       }
@@ -365,7 +370,6 @@
 
     _fire() {
       const lanes = 3 + 2 * Math.min(4, Math.floor(this.kills / 1000));
-      if (this.bullets.length + lanes > 2400) return;
       const spread = Array.from({ length: lanes }, (_, i) => (i - (lanes - 1) / 2) * 0.075);
       for (const angle of spread) {
         this.bullets.push({ x: this.player.x + angle * 70, y: this.player.y - 19, vx: Math.sin(angle) * 710, vy: -Math.cos(angle) * 710, dead: false });
@@ -375,7 +379,7 @@
 
     _spawnWave() {
       const pattern = this.wave++ % 5;
-      const count = Math.min(pattern === 3 ? 8 : 6, 480 - this.enemies.length);
+      const count = pattern === 3 ? 8 : 6;
       const offset = random(-20, 20);
       for (let i = 0; i < count; i++) {
         const type = (this.wave + i) % 9 === 0 ? 2 : ((this.wave + i) % 3 === 0 ? 1 : 0);
@@ -399,7 +403,6 @@
     }
 
     _enemyFire() {
-      if (this.enemyBullets.length >= 80) return;
       const candidates = this.enemies.filter(enemy => !enemy.dead && enemy.y > 20 && enemy.y < this.height * 0.65 && enemy.y < this.player.y - 80);
       if (!candidates.length) return;
       const enemy = candidates[Math.floor(Math.random() * candidates.length)];
@@ -425,10 +428,10 @@
       this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.floor(this.combo / 25));
       this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
       this.shake = Math.min(24, this.shake + (enemy.type === 2 ? 8 : 2.8));
-      if (this.rings.length < 96) this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
-      if (this.combo % 25 === 0 && this.popups.length < 24) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
+      this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
+      if (this.combo % 25 === 0) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
       if (!fromBomb) this._tone('hit');
-      if (this.kills % 45 === 0 && this.pickups.length < 5) {
+      if (this.kills % 45 === 0) {
         this.pickups.push({ x: clamp(enemy.x, 35, WIDTH - 35), y: Math.max(20, enemy.y), age: 0, dead: false });
       }
       if (this.kills % 100 === 0) {
@@ -480,8 +483,7 @@
 
     _sparks(x, y, color, count, speed) {
       this.impact = Math.max(this.impact, Math.min(1, count / 24));
-      const available = Math.max(0, 2400 - this.particles.length);
-      for (let i = 0; i < Math.min(count * 2, available); i++) {
+      for (let i = 0; i < count * 2; i++) {
         const angle = random(0, TAU);
         const velocity = random(speed * 0.5, speed * 2);
         const life = random(0.3, 0.85);

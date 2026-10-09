@@ -49,10 +49,12 @@ All visual and audio assets are generated locally. The game makes no external re
 
 Starting enemy travel, firing, and wave frequency are 4.5 times the original baseline (1.5 times the previous release): standard sector-one enemies start at 369 units/sec, firing at 42.86 volleys/sec, and formations at 4.41/sec.
 
-Speed starts at 1x, gains +1x per 30 seconds of active play, and receives additive kill bonuses every 1,000 kills. Milestone n adds 2^(n/2) - 2^((n-1)/2). Thus the first two milestones add a total +1x, the next two add +2x, and so on; these additions preserve all speed already earned from time. The multiplier has no upper clamp. Enemy movement, firing, and waves all use the combined multiplier. Pause and switching apps freeze the clock; restart resets all bonuses. The score chain multiplier also has no upper cap. The mission still ends at exactly 10,000 kills.
+Speed starts at 1x, gains exactly +0.01x after every 0.3 seconds of active play, and receives additive kill bonuses every 1,000 kills. Milestone n adds 2^(n/2) - 2^((n-1)/2). Thus the first two milestones add a total +1x, the next two add +2x, and so on; these additions preserve all speed already earned from time. The multiplier has no upper clamp. Enemy movement, firing, and waves all use the combined multiplier. Pause and switching apps freeze the clock; restart resets all bonuses. The score chain multiplier also has no upper cap. The mission still ends at exactly 10,000 kills.
 
 Page-wide RGB separation, bloom and shake affect the entire interface. A fixed viewport overlay lets blast rings, flares, sparks and nova waves spill beyond the game canvas. Quiet flight stays subtle; impacts trigger the stronger effects. Reduced-motion settings suppress camera shake and moving chromatic offsets.
 
-Performance budgets remain separate from the uncapped multiplier: 480 enemies, 2,400 player bullets, 2,400 particles, and 96 explosion rings. These protect rendering at extreme rates. Actual emission can be lower than the nominal rate when a budget is full. Touch controls remain usable through the pointer-transparent effects overlay.
+All simultaneous-entity ceilings have been removed at the user's request, including enemies, player bullets, enemy bullets, particles, explosion rings, pickups, and chain popups. Emission follows the uncapped multiplier without dropping entities; extreme sessions can consume substantial CPU, GPU, and memory. Touch controls remain usable through the pointer-transparent effects overlay.
+
+On desktop, the game station is approximately 1.3 times wider (650px maximum instead of 500px) and 1.05 times taller (693px maximum instead of 660px). Large displays can reach 798px arena height. Responsive tablet and phone layouts still fit the viewport.
 
 Run regression checks with `node --test tests/game.test.cjs`. Restart the local server after updating its asset list.

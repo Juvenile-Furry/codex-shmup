@@ -302,30 +302,30 @@ test('actual firing and waves double every 2000 kills, including multiple volley
   assert(samples[4].volleys > 120, 'must fire multiple times in one frame');
 });
 
-test('sectors change every 1000 kills; late-game load stays finite and within budgets', () => {
+test('sectors change every 1000 kills; late-game entities remain finite without count caps', () => {
   const h = setup(); h.game.start(); h.quiet(); h.game.kills = 999;
   h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
   assert.equal(h.game.sector, 2);
   h.game.kills = 9000; h.game.killBoost = 2 ** 4.5 - 1; h.game.sector = 10; h.game.spawnTimer = h.game.shotTimer = 0;
   h.game.invulnerability = 100;
-  for (let i = 0; i < 900 && h.game.status === 'playing'; i++) {
+  let exceededFormerCeiling = false;
+  for (let i = 0; i < 300 && h.game.status === 'playing'; i++) {
     h.game.player.x = 240 + Math.sin(i / 45) * 195;
     h.frame();
-    assert(h.game.enemies.length <= 480);
-    assert(h.game.bullets.length <= 2400);
-    assert(h.game.particles.length <= 2400);
-    assert(h.game.rings.length <= 96);
+    exceededFormerCeiling ||= h.game.enemies.length > 480 || h.game.bullets.length > 2400 ||
+      h.game.particles.length > 2400 || h.game.rings.length > 96;
     assert(h.game.enemies.every(e => Number.isFinite(e.x) && Number.isFinite(e.y)));
   }
   assert(h.game.kills > 9000);
+  assert(exceededFormerCeiling, 'at least one former simultaneous-entity ceiling must be exceeded');
   h.game.destroy();
 });
 
-test('a single remaining enemy slot never produces NaN coordinates', () => {
+test('waves continue beyond the former 480-enemy ceiling without invalid coordinates', () => {
   const h = setup(); h.game.start();
   h.game.enemies = Array.from({ length: 479 }, () => enemy());
   h.game._spawnWave();
-  assert.equal(h.game.enemies.length, 480);
+  assert.equal(h.game.enemies.length, 485);
   assert(h.game.enemies.every(e => Number.isFinite(e.x)));
   h.game.destroy();
 });
@@ -385,16 +385,21 @@ test('idle effects are subtle, kills double the prior burst, and quiet flight se
   h.game.destroy();
 });
 
-test('time adds 1x every 30 seconds, freezes on pause and resets on restart', () => {
+test('time adds exactly 0.01x every 0.3 seconds, freezes on pause and resets on restart', () => {
   const h = setup(); h.game.start(); h.quiet();
-  for (let i = 0; i < 1800; i++) h.game._update(1 / 60);
-  assert(Math.abs(h.game._pace() - 2) < 1e-9);
+  h.game._update(0.299);
+  assert.equal(h.game._pace(), 1);
+  h.game._update(0.001);
+  assert.equal(h.game._pace(), 1.01);
+  h.game._update(0.6);
+  assert.equal(h.game._pace(), 1.03);
   h.game.pause();
   for (let i = 0; i < 300; i++) h.game._update(1 / 60);
-  assert(Math.abs(h.game._pace() - 2) < 1e-9);
+  assert.equal(h.game._pace(), 1.03);
   h.game.start();
   assert.equal(h.game._pace(), 1);
   assert.equal(h.game.timeBoost, 0);
+  assert.equal(h.game.timeBoostTimer, 0);
   assert.equal(h.game.killBoost, 0);
   h.game.destroy();
 });
