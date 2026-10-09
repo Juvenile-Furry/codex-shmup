@@ -46,7 +46,9 @@ All visual and audio assets are generated locally. The game makes no external re
 
 ## Overdrive mode
 
-The objective is 10,000 kills. Fire and wave rates scale exponentially: `multiplier = 2 ** (kills / 2000)`, from 1× to 32×. Volleys grow from three to eleven lanes. Nova recharge remains every 100 kills. Explosions use additive glow, shockwaves, streak particles, chain popups, and camera shake. OS reduced-motion preferences disable camera shake and background acceleration.
+The objective is 10,000 kills. Enemy travel, initial firing, and initial wave frequency run at twice the original speed: 164 units/sec for standard sector-one enemies, about 19 volleys/sec, and 1.96 formations/sec. Fire and wave rates then scale exponentially: `rate = 2 * originalRate * 2 ** (kills / 2000)`. The OVERDRIVE display reports progression relative to this new starting speed (1× to 32×). Volleys grow from three to eleven lanes. Nova recharge remains every 100 kills.
+
+Visuals include strong full-field RGB channel separation, oversized bloom echoes, dual shockwaves, eight-ray impact bursts, horizontal lens flares, longer sparks, chain popups, and amplified camera shake. Color separation intensifies with overdrive, impacts, and nova bombs. Two reusable offscreen canvases avoid per-frame pixel readback. OS reduced-motion preferences disable camera shake and background acceleration and keep chromatic offsets static and smaller. HUD and controls remain outside the post-processing effect.
 
 Performance budgets: 480 enemies, 2,400 player bullets, 1,200 particles, and 96 explosion rings. Rate timers process multiple volleys per frame; horizontal collision buckets limit collision work. At extreme load the entity budgets take priority over spawn/firing rates.
 

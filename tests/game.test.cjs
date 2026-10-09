@@ -34,6 +34,7 @@ function setup() {
   }});
   const window = new Events();
   const document = new Events();
+  document.createElement = () => ({ width: 0, height: 0, getContext: () => context2d });
   document.hidden = false;
   window.devicePixelRatio = 3;
   const canvas = new Events();
@@ -52,7 +53,7 @@ function setup() {
   vm.runInNewContext(source, sandbox, { filename: 'game.js' });
   const updates = [], events = [];
   const game = new window.ShmupGame({ canvas, onUpdate: state => updates.push(state), onEvent: event => events.push(event) });
-  function frame(ms = 10000 / 60) {
+  function frame(ms = 1000 / 60) {
     now += ms;
     const pending = [...raf.values()]; raf.clear();
     for (const fn of pending) fn(now);
@@ -261,7 +262,7 @@ test('restarting resets mission, lives, ammunition, elapsed time, entities, and 
   h.window.emit('keydown', { key: 'w' });
   h.game.pause(); h.game.start();
   assert.deepEqual(json(h.game.snapshot()), { status: 'playing', kills: 0, target: 10000,
-    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 1 / 0.105, spawnRate: 1 / 1.02 });
+    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 2 / 0.105, spawnRate: 2 / 1.02 });
   assert.equal(h.game.enemies.length + h.game.bullets.length + h.game.enemyBullets.length, 0);
   assert.equal(h.game.keys.size, 0);
   assert.equal(h.game.pointer, null);
@@ -326,5 +327,36 @@ test('a single remaining enemy slot never produces NaN coordinates', () => {
   h.game._spawnWave();
   assert.equal(h.game.enemies.length, 480);
   assert(h.game.enemies.every(e => Number.isFinite(e.x)));
+  h.game.destroy();
+});
+
+test('initial volleys, formation frequency and enemy travel are twice the original baseline', () => {
+  const h = setup(); h.game.start();
+  let bullets = 0;
+  for (let i = 0; i < 120; i++) {
+    h.game.bullets.length = 0; h.frame(); bullets += h.game.bullets.length;
+  }
+  assert(bullets / 3 >= 37 && bullets / 3 <= 40, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
+  assert.equal(h.game.wave, 4);
+  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 210 : 164)));
+  const e = enemy({ speed: 164 });
+  h.game.enemies = [e]; h.quiet();
+  const y = e.y;
+  for (let i = 0; i < 60; i++) h.frame();
+  assert(Math.abs(e.y - y - 164) < 0.01);
+  h.game.destroy();
+});
+
+test('RGB compositor separates all three color channels on resized reusable surfaces', () => {
+  const h = setup();
+  const colors = [], offsets = [];
+  h.game.channelCtx = { drawImage() {}, fillRect() { colors.push(this.fillStyle); } };
+  h.game.sceneCtx = { drawImage() {} };
+  const ctx = { save() {}, restore() {}, fillRect() {}, drawImage(source, x) { if (source === h.game.channelCanvas) offsets.push(x); } };
+  h.game._drawChromaticAberration(ctx);
+  assert.deepEqual(colors, ['#ff0000', '#00ff00', '#0000ff']);
+  assert(offsets[0] < 0 && offsets[1] === 0 && offsets[2] > 0);
+  assert.equal(h.game.sceneCanvas.width, h.canvas.width);
+  assert.equal(h.game.channelCanvas.height, h.canvas.height);
   h.game.destroy();
 });

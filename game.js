@@ -4,6 +4,7 @@
 
   const TAU = Math.PI * 2;
   const TARGET = 10000;
+  const BASE_SPEED = 2;
   const WIDTH = 480;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const random = (low, high) => low + Math.random() * (high - low);
@@ -15,6 +16,11 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d', { alpha: false });
       if (!this.ctx) throw new Error('Your browser does not support Canvas 2D.');
+      // Reuse two GPU-backed surfaces for real RGB channel separation; no pixel readback.
+      this.sceneCanvas = document.createElement('canvas');
+      this.channelCanvas = document.createElement('canvas');
+      this.sceneCtx = this.sceneCanvas.getContext('2d');
+      this.channelCtx = this.channelCanvas.getContext('2d');
       this.onUpdate = typeof onUpdate === 'function' ? onUpdate : () => {};
       this.onEvent = typeof onEvent === 'function' ? onEvent : () => {};
       this.width = WIDTH;
@@ -74,7 +80,7 @@
       this.combo = 0;
       this.comboTimer = 0;
       this.wave = 0;
-      this.spawnTimer = 0.15;
+      this.spawnTimer = 0.15 / BASE_SPEED;
       this.shotTimer = 0;
       this.enemyShotTimer = 1.8;
       this.invulnerability = 0;
@@ -98,7 +104,7 @@
         status: this.status, kills: this.kills, target: TARGET,
         health: this.health, maxHealth: this.maxHealth, bombs: this.bombs,
         sector: this.sector, score: this.score, elapsed: this.elapsed, combo: this.combo,
-        overdrive: this._pace(), fireRate: this._pace() / 0.105, spawnRate: this._pace() / 1.02
+        overdrive: this._pace(), fireRate: BASE_SPEED * this._pace() / 0.105, spawnRate: BASE_SPEED * this._pace() / 1.02
       };
     }
 
@@ -168,6 +174,10 @@
       this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
       this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
       this.scale = this.canvas.width / WIDTH;
+      for (const surface of [this.sceneCanvas, this.channelCanvas]) {
+        surface.width = this.canvas.width;
+        surface.height = this.canvas.height;
+      }
       if (this.player) this.player.y = clamp(this.player.y / oldHeight * this.height, 40, this.height - 28);
       this._draw();
     }
@@ -249,7 +259,7 @@
       this.player.bank += (horizontal - this.player.bank) * Math.min(1, dt * 10);
 
       this.shotTimer -= dt;
-      const pace = this._pace();
+      const pace = BASE_SPEED * this._pace();
       while (this.shotTimer <= 0) {
         this.shotTimer += 0.105 / pace;
         this._fire();
@@ -371,7 +381,7 @@
         if (pattern === 4) { x = 95 + (i % 2) * 280; y -= Math.floor(i / 2) * 44; sway = 48; swayRate = 1.9; }
         this.enemies.push({
           x, baseX: x, y, type, age: 0, phase: i * 0.65, sway, swayRate,
-          speed: 79 + this.sector * 3 + (type === 1 ? 23 : 0),
+          speed: BASE_SPEED * (79 + this.sector * 3 + (type === 1 ? 23 : 0)),
           r: type === 2 ? 17 : 13, hp: type === 2 ? 3 : 1,
           color: type === 2 ? COLORS.lilac : type === 1 ? COLORS.cyan : COLORS.coral,
           hit: 0, dead: false
@@ -399,8 +409,8 @@
       this.combo++;
       this.comboTimer = 2.8;
       this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.min(4, Math.floor(this.combo / 25)));
-      this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 28 : 35, enemy.type === 2 ? 260 : 190);
-      this.shake = Math.min(9, this.shake + (enemy.type === 2 ? 2.5 : 0.8));
+      this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
+      this.shake = Math.min(12, this.shake + (enemy.type === 2 ? 4 : 1.4));
       if (this.rings.length < 96) this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
       if (this.combo % 25 === 0 && this.popups.length < 24) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
       if (!fromBomb) this._tone('hit');
@@ -507,6 +517,19 @@
         ctx.globalAlpha = ring.life / ring.maxLife * 0.55;
         ctx.lineWidth = 2 + ring.life * 7;
         ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = COLORS.cyan;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.65, 0, TAU); ctx.stroke();
+        // Anamorphic flare and eight expanding impact rays.
+        ctx.fillStyle = ring.color;
+        ctx.fillRect(ring.x - ring.radius * 3, ring.y - 1.5, ring.radius * 6, 3);
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const angle = i * TAU / 8;
+          ctx.moveTo(ring.x + Math.cos(angle) * ring.radius * 0.5, ring.y + Math.sin(angle) * ring.radius * 0.5);
+          ctx.lineTo(ring.x + Math.cos(angle) * ring.radius * 2, ring.y + Math.sin(angle) * ring.radius * 2);
+        }
+        ctx.stroke();
         ctx.globalAlpha = ring.life / ring.maxLife * 0.12;
         ctx.fillStyle = ring.color;
         ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.6, 0, TAU); ctx.fill();
@@ -517,7 +540,7 @@
         ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
         ctx.strokeStyle = particle.color;
         ctx.lineWidth = particle.size * 0.5;
-        ctx.beginPath(); ctx.moveTo(particle.x, particle.y); ctx.lineTo(particle.x - particle.vx * 0.045, particle.y - particle.vy * 0.045); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(particle.x, particle.y); ctx.lineTo(particle.x - particle.vx * 0.09, particle.y - particle.vy * 0.09); ctx.stroke();
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.textAlign = 'center';
@@ -546,6 +569,32 @@
         ctx.strokeRect(0, 0, WIDTH, this.height);
       }
       this._drawFrame(ctx);
+      this._drawChromaticAberration(ctx);
+    }
+
+    _drawChromaticAberration(ctx) {
+      if (!this.sceneCtx || !this.channelCtx) return;
+      const w = this.canvas.width, h = this.canvas.height;
+      const scene = this.sceneCtx, channel = this.channelCtx;
+      scene.globalCompositeOperation = 'copy';
+      scene.drawImage(this.canvas, 0, 0);
+      const active = this.status === 'playing';
+      const strength = this.reducedMotion ? 3 : 5 + Math.log2(this._pace()) * 1.4 + (active ? this.shake * 0.7 + this.bombPulse * 15 : 0);
+      const drift = this.reducedMotion ? 0 : Math.sin(this._visualTime * 2.3) * strength * 0.22;
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, WIDTH, this.height);
+      for (const [color, x, y] of [['#ff0000', -strength, drift], ['#00ff00', 0, 0], ['#0000ff', strength, -drift]]) {
+        channel.globalCompositeOperation = 'copy'; channel.drawImage(this.sceneCanvas, 0, 0);
+        channel.globalCompositeOperation = 'multiply'; channel.fillStyle = color; channel.fillRect(0, 0, w, h);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(this.channelCanvas, x, y, WIDTH, this.height);
+      }
+      // Oversized luminous echo adds bloom without a costly full-screen blur filter.
+      ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = active ? 0.18 : 0.08;
+      ctx.drawImage(this.sceneCanvas, -7, -7, WIDTH + 14, this.height + 14);
+      ctx.restore();
     }
 
     _drawBackground(ctx) {
