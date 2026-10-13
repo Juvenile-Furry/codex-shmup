@@ -5,6 +5,7 @@
   const TAU = Math.PI * 2;
   const TARGET = 10000;
   const BASE_SPEED = 2;
+  const SPAWN_FACTOR = 2;
   const WIDTH = 480;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const random = (low, high) => low + Math.random() * (high - low);
@@ -85,7 +86,7 @@
       this.combo = 0;
       this.comboTimer = 0;
       this.wave = 0;
-      this.spawnTimer = 0.15 / BASE_SPEED;
+      this.spawnTimer = 0.15 / (BASE_SPEED * SPAWN_FACTOR);
       this.shotTimer = 0;
       this.enemyShotTimer = 1.8;
       this.invulnerability = 0;
@@ -93,6 +94,7 @@
       this.flash = 0;
       this.bombPulse = 0;
       this.impact = 0;
+      this.killPulse = 0;
       this.player = { x: WIDTH / 2, y: this.height * 0.82, r: 8, bank: 0 };
       this.enemies.length = 0;
       this.bullets.length = 0;
@@ -110,7 +112,7 @@
         status: this.status, kills: this.kills, target: TARGET,
         health: this.health, maxHealth: this.maxHealth, bombs: this.bombs,
         sector: this.sector, score: this.score, elapsed: this.elapsed, combo: this.combo,
-        overdrive: this._pace(), fireRate: BASE_SPEED * Math.min(8, this._pace()) / 0.105, spawnRate: BASE_SPEED * Math.min(8, this._pace()) / 1.02
+        overdrive: this._pace(), fireRate: BASE_SPEED * Math.min(8, this._pace()) / 0.105, spawnRate: SPAWN_FACTOR * BASE_SPEED * Math.min(8, this._pace()) / 1.02
       };
     }
 
@@ -266,8 +268,8 @@
       const horizontal = Number(this.keys.has('arrowright') || this.keys.has('d')) - Number(this.keys.has('arrowleft') || this.keys.has('a'));
       const vertical = Number(this.keys.has('arrowdown') || this.keys.has('s')) - Number(this.keys.has('arrowup') || this.keys.has('w'));
       const diagonal = horizontal && vertical ? Math.SQRT1_2 : 1;
-      this.player.x = clamp(this.player.x + horizontal * 315 * dt * diagonal, 22, WIDTH - 22);
-      this.player.y = clamp(this.player.y + vertical * 315 * dt * diagonal, 48, this.height - 24);
+      this.player.x = clamp(this.player.x + horizontal * 945 * dt * diagonal, 22, WIDTH - 22);
+      this.player.y = clamp(this.player.y + vertical * 945 * dt * diagonal, 48, this.height - 24);
       this.player.bank += (horizontal - this.player.bank) * Math.min(1, dt * 10);
 
       this.shotTimer -= dt;
@@ -277,11 +279,11 @@
         this._fire();
       }
       this.spawnTimer -= dt;
-      while (this.spawnTimer <= 0 && this.enemies.length < 96) {
+      while (this.spawnTimer <= 0) {
         this._spawnWave();
-        this.spawnTimer += 1.02 / pace;
+        this.spawnTimer += 1.02 / (pace * SPAWN_FACTOR);
       }
-      this.spawnTimer = Math.max(this.spawnTimer, -1.02 / pace);
+      this.spawnTimer = Math.max(this.spawnTimer, -1.02 / (pace * SPAWN_FACTOR));
       this.enemyShotTimer -= dt;
       if (this.enemyShotTimer <= 0) {
         this.enemyShotTimer = Math.max(0.43, 0.93 - this.sector * 0.045);
@@ -380,7 +382,7 @@
 
     _spawnWave() {
       const pattern = this.wave++ % 5;
-      const count = Math.min(pattern === 3 ? 8 : 6, Math.max(0, 96 - this.enemies.length));
+      const count = pattern === 3 ? 8 : 6;
       const offset = random(-20, 20);
       for (let i = 0; i < count; i++) {
         const type = (this.wave + i) % 9 === 0 ? 2 : ((this.wave + i) % 3 === 0 ? 1 : 0);
@@ -420,6 +422,7 @@
       if (enemy.dead || this.status !== 'playing' || this.kills >= TARGET) return false;
       enemy.dead = true;
       this.kills++;
+      this.killPulse = 0.22;
       // Milestone differences are added to earned speed, never assigned as a cap.
       if (this.kills % 1000 === 0) {
         const level = this.kills / 1000;
@@ -430,7 +433,6 @@
       this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.floor(this.combo / 25));
       this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
       this.shake = Math.min(4, this.shake + (enemy.type === 2 ? 8 : 2.8));
-      if (this.rings.length < 24) this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
       if (this.combo % 25 === 0 && this.popups.length < 12) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
       if (!fromBomb) this._tone('hit');
       if (this.kills % 45 === 0 && this.pickups.length < 5) {
@@ -485,7 +487,7 @@
 
     _sparks(x, y, color, count, speed) {
       this.impact = Math.max(this.impact, Math.min(1, count / 24));
-      for (let i = 0; i < Math.min(Math.ceil(count / 4), Math.max(0, 480 - this.particles.length)); i++) {
+      for (let i = 0; i < Math.min(3, Math.max(0, 96 - this.particles.length)); i++) {
         const angle = random(0, TAU);
         const velocity = random(speed * 0.5, speed * 2);
         const life = random(0.3, 0.85);
@@ -494,6 +496,7 @@
     }
 
     _updateEffects(dt) {
+      this.killPulse = Math.max(0, this.killPulse - dt);
       this.shake = Math.max(0, this.shake - dt * 48);
       this.impact = Math.max(0, this.impact - dt * 2.5);
       this.flash = Math.max(0, this.flash - dt);
@@ -506,8 +509,6 @@
         particle.life -= dt;
       }
       this.particles = this.particles.filter(particle => particle.life > 0);
-      for (const ring of this.rings) { ring.radius += dt * 210; ring.life -= dt; }
-      this.rings = this.rings.filter(ring => ring.life > 0);
       for (const popup of this.popups) { popup.y -= dt * 35; popup.life -= dt; }
       this.popups = this.popups.filter(popup => popup.life > 0);
     }
@@ -522,8 +523,6 @@
       ctx.fillRect(0, 0, WIDTH, this.height);
       this._drawBackground(ctx);
       ctx.save();
-      if (!this.onEffects && !this.reducedMotion && this.shake && this.status !== 'paused') ctx.translate(random(-this.shake, this.shake), random(-this.shake, this.shake));
-
       if (this.status === 'ready') this._drawIdle(ctx);
       else {
         for (const pickup of this.pickups) this._drawPickup(ctx, pickup);
@@ -531,36 +530,10 @@
         for (const enemy of this.enemies) if (!enemy.dead) this._drawEnemy(ctx, enemy);
         if (this.status !== 'gameover') this._drawPlayer(ctx, this.player.x, this.player.y, this.player.bank);
       }
-      ctx.globalCompositeOperation = 'lighter';
-      for (const ring of this.rings) {
-        ctx.strokeStyle = ring.color;
-        ctx.globalAlpha = Math.min(1, ring.life / ring.maxLife * 1.1);
-        ctx.lineWidth = 4 + ring.life * 14;
-        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius, 0, TAU); ctx.stroke();
-        ctx.strokeStyle = COLORS.cyan;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.65, 0, TAU); ctx.stroke();
-        // Anamorphic flare and eight expanding impact rays.
-        ctx.fillStyle = ring.color;
-        ctx.fillRect(ring.x - ring.radius * 3, ring.y - 1.5, ring.radius * 6, 3);
-        ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const angle = i * TAU / 8;
-          ctx.moveTo(ring.x + Math.cos(angle) * ring.radius * 0.5, ring.y + Math.sin(angle) * ring.radius * 0.5);
-          ctx.lineTo(ring.x + Math.cos(angle) * ring.radius * 2, ring.y + Math.sin(angle) * ring.radius * 2);
-        }
-        ctx.stroke();
-        ctx.globalAlpha = ring.life / ring.maxLife * 0.24;
-        ctx.fillStyle = ring.color;
-        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.6, 0, TAU); ctx.fill();
-      }
       for (const particle of this.particles) {
         ctx.globalAlpha = particle.life / particle.maxLife;
         ctx.fillStyle = particle.color;
         ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
-        ctx.strokeStyle = particle.color;
-        ctx.lineWidth = particle.size * 0.5;
-        ctx.beginPath(); ctx.moveTo(particle.x, particle.y); ctx.lineTo(particle.x - particle.vx * 0.09, particle.y - particle.vy * 0.09); ctx.stroke();
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.textAlign = 'center';
@@ -571,16 +544,6 @@
         ctx.fillStyle = popup.color; ctx.fillText(popup.text, popup.x, popup.y);
       }
       ctx.globalAlpha = 1;
-      if (this.bombPulse > 0) {
-        const progress = 1 - this.bombPulse;
-        ctx.strokeStyle = COLORS.lime;
-        ctx.lineWidth = 6 + this.bombPulse * 14;
-        ctx.globalAlpha = this.bombPulse * 0.7;
-        ctx.beginPath(); ctx.arc(this.player.x, this.player.y, progress * Math.max(WIDTH, this.height) * 1.5, 0, TAU); ctx.stroke();
-        ctx.fillStyle = COLORS.lime;
-        ctx.globalAlpha = this.bombPulse * 0.12;
-        ctx.fillRect(0, 0, WIDTH, this.height);
-      }
       ctx.restore();
       ctx.globalAlpha = 1;
       if (this.flash > 0) {
@@ -589,18 +552,13 @@
         ctx.strokeRect(0, 0, WIDTH, this.height);
       }
       this._drawFrame(ctx);
-      // Chromatic post-processing disabled in the low-load default.
+      if (this.killPulse > 0 && this.status !== 'paused') this._drawChromaticAberration(ctx);
     }
 
     _effectProfile() {
-      const quiet = this.status === 'ready' || this.status === 'paused';
-      const impact = quiet ? 0 : Math.max(this.impact, this.bombPulse);
-      if (this.reducedMotion) return { strength: 0.7, bloom: 0.025 + impact * 0.12, echo: 2 };
-      return {
-        strength: 0.8 + impact * (10 + Math.log2(this._pace()) * 2.8 + this.shake * 0.7 + this.bombPulse * 30),
-        bloom: 0.025 + impact * 0.335,
-        echo: 2 + impact * 12
-      };
+      const active = this.status !== 'ready' && this.status !== 'paused';
+      const strength = active ? Math.min(1, this.killPulse / 0.22) * (this.reducedMotion ? 0.8 : 8) : 0;
+      return { strength, bloom: 0, echo: 0 };
     }
 
     _drawChromaticAberration(ctx) {
@@ -609,7 +567,7 @@
       const scene = this.sceneCtx, channel = this.channelCtx;
       scene.globalCompositeOperation = 'copy';
       scene.drawImage(this.canvas, 0, 0);
-      const { strength, bloom, echo } = this._effectProfile();
+      const { strength } = this._effectProfile();
       const drift = this.reducedMotion ? 0 : Math.sin(this._visualTime * 2.3) * strength * 0.22;
       ctx.save();
       ctx.globalAlpha = 1;
@@ -621,9 +579,6 @@
         ctx.globalCompositeOperation = 'lighter';
         ctx.drawImage(this.channelCanvas, x, y, WIDTH, this.height);
       }
-      // Oversized luminous echo adds bloom without a costly full-screen blur filter.
-      ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = bloom;
-      ctx.drawImage(this.sceneCanvas, -echo, -echo, WIDTH + echo * 2, this.height + echo * 2);
       ctx.restore();
     }
 

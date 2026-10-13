@@ -262,7 +262,7 @@ test('restarting resets mission, lives, ammunition, elapsed time, entities, and 
   h.window.emit('keydown', { key: 'w' });
   h.game.pause(); h.game.start();
   assert.deepEqual(json(h.game.snapshot()), { status: 'playing', kills: 0, target: 10000,
-    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 2 / 0.105, spawnRate: 2 / 1.02 });
+    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 2 / 0.105, spawnRate: 4 / 1.02 });
   assert.equal(h.game.enemies.length + h.game.bullets.length + h.game.enemyBullets.length, 0);
   assert.equal(h.game.keys.size, 0);
   assert.equal(h.game.pointer, null);
@@ -308,38 +308,36 @@ test('sectors change every 1000 kills; late-game entities remain finite within r
   assert.equal(h.game.sector, 2);
   h.game.kills = 9000; h.game.killBoost = 2 ** 4.5 - 1; h.game.sector = 10; h.game.spawnTimer = h.game.shotTimer = 0;
   h.game.invulnerability = 100;
-  let exceededFormerCeiling = false;
   for (let i = 0; i < 300 && h.game.status === 'playing'; i++) {
     h.game.player.x = 240 + Math.sin(i / 45) * 195;
     h.frame();
-    assert(h.game.enemies.length <= 96);
     assert(h.game.bullets.length <= 320);
-    assert(h.game.particles.length <= 480);
+    assert(h.game.particles.length <= 96);
     assert(h.game.rings.length <= 24);
     assert(h.game.enemies.every(e => Number.isFinite(e.x) && Number.isFinite(e.y)));
   }
   assert(h.game.kills > 9000);
-  
+
   h.game.destroy();
 });
 
-test('waves stop at the restored enemy ceiling without invalid coordinates', () => {
+test('waves exceed the previous enemy ceiling without invalid coordinates', () => {
   const h = setup(); h.game.start();
   h.game.enemies = Array.from({ length: 95 }, () => enemy());
   h.game._spawnWave();
-  assert.equal(h.game.enemies.length, 96);
+  assert.equal(h.game.enemies.length, 101);
   assert(h.game.enemies.every(e => Number.isFinite(e.x)));
   h.game.destroy();
 });
 
-test('initial volleys, formation frequency and enemy travel are twice the original baseline with continuous time acceleration', () => {
+test('initial spawning is doubled again while firing and enemy travel retain their baseline', () => {
   const h = setup(); h.game.start();
   let bullets = 0;
   for (let i = 0; i < 120; i++) {
     h.game.bullets.length = 0; h.game.enemies.length = 0; h.frame(); bullets += h.game.bullets.length;
   }
   assert(bullets / 3 >= 37 && bullets / 3 <= 41, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
-  assert.equal(h.game.wave, 4);
+  assert.equal(h.game.wave, 8);
   assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 210 : 164)));
   const e = enemy({ speed: 369 });
   h.game.enemies = [e]; h.quiet();
@@ -352,6 +350,7 @@ test('initial volleys, formation frequency and enemy travel are twice the origin
 
 test('RGB compositor separates all three color channels on resized reusable surfaces', () => {
   const h = setup();
+  h.game.start(); h.game._killEnemy(enemy(), false);
   const colors = [], offsets = [];
   h.game.channelCtx = { drawImage() {}, fillRect() { colors.push(this.fillStyle); } };
   h.game.sceneCtx = { drawImage() {} };
@@ -364,26 +363,31 @@ test('RGB compositor separates all three color channels on resized reusable surf
   h.game.destroy();
 });
 
-test('idle effects are subtle, kills double the prior burst, and quiet flight settles back down', () => {
-  const h = setup();
-  assert(h.game._effectProfile().strength < 1);
-  assert(h.game._effectProfile().bloom < 0.03);
-  h.game.start(); h.quiet();
-  h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
-  assert.equal(h.game.particles.length, 15);
-  assert(h.game._effectProfile().strength > 11);
-  assert(h.game._effectProfile().bloom > 0.33);
-  for (let i = 0; i < 120; i++) h.frame();
-  assert(h.game._effectProfile().strength < 1);
-  assert.equal(h.game.particles.length, 0);
+test('only kills trigger brief canvas chroma; other effects stay minimal', () => {
+  const h = setup(); h.game.start(); h.quiet();
+  assert.equal(h.game._effectProfile().strength, 0);
   h.game.bomb();
-  assert(h.game._effectProfile().strength > 40);
-  h.game.pause();
-  assert(h.game._effectProfile().strength < 1);
-  h.game.start();
-  assert.equal(h.game.impact, 0);
-  h.game.reducedMotion = true; h.game.bomb();
-  assert(h.game._effectProfile().strength < 1);
+  assert.equal(h.game._effectProfile().strength, 0, 'empty nova must not trigger kill chroma');
+  h.game._killEnemy(enemy(), false);
+  assert.equal(h.game.particles.length, 3);
+  assert.equal(h.game.rings.length, 0);
+  assert(h.game._effectProfile().strength > 7);
+  h.game.pause(); assert.equal(h.game._effectProfile().strength, 0);
+  h.game.resume();
+  for (let i = 0; i < 20; i++) h.frame();
+  assert.equal(h.game._effectProfile().strength, 0);
+  h.game.start(); assert.equal(h.game.killPulse, 0);
+  h.game.destroy();
+});
+
+test('keyboard movement is tripled with normalized diagonal movement', () => {
+  const h = setup(); h.game.start(); h.quiet();
+  const x = h.game.player.x;
+  h.window.emit('keydown', { key: 'd' }); h.game._update(0.03);
+  assert(Math.abs(h.game.player.x - x - 28.35) < 1e-9);
+  h.window.emit('keydown', { key: 'w' });
+  const before = { ...h.game.player }; h.game._update(0.03);
+  assert(Math.abs(Math.hypot(h.game.player.x-before.x, h.game.player.y-before.y) - 28.35) < 1e-9);
   h.game.destroy();
 });
 

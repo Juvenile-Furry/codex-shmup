@@ -45,10 +45,10 @@ Sound starts muted. Your personal best is saved in this browser when a run ends,
 
 All visual and audio assets are generated locally. The game makes no external requests and has no third-party dependencies. The server exposes only the browser assets. Stop it with Ctrl+C.
 
-## Low-load mode
+## Current gameplay and effects
 
-The 10,000-kill objective and drag controls remain. Starting speed is back to 2x the original baseline. Time still adds 0.01x every 0.3 seconds, and kill bonuses remain additive. Earned multiplier is retained, while effective movement/firing/spawning speed is capped at 8x.
+The 10,000-kill goal, drag movement and automatic firing remain. Enemies have no simultaneous-count ceiling. Formation spawning is doubled from the previous release (about 3.92 waves/sec initially); the other speed settings are unchanged. Keyboard movement is 945 world units/sec, three times its previous speed, with normalized diagonal movement. Touch drag sensitivity is unchanged.
 
-Restored simultaneous limits: 96 enemies, 320 player bullets, at most 64 enemy bullets, 480 sparks, 24 shockwaves, 5 pickups and 12 chain labels. Sparks per explosion are reduced to one eighth of the previous version. Page-wide filters, bloom, shake and duplicate viewport effects are disabled. The arena returns to a 500px maximum desktop width and 660px standard maximum height, with responsive mobile layouts.
+Each enemy kill triggers 0.22 seconds of RGB separation inside the game canvas. Quiet frames skip the compositor entirely. Bloom, full-page effects, camera shake, explosion rings, long particle trails and nova screen flashes are disabled. Kills emit three simple sparks, with a total budget of 96. Player bullets remain capped at 320, enemy bullets at 64, pickups at five and chain popups at twelve.
 
-Run checks with node --test tests/game.test.cjs.
+Time adds 0.01x every 0.3 seconds. Kill bonuses stay additive and effective game speed remains capped at 8x. Run tests with node --test tests/game.test.cjs.
