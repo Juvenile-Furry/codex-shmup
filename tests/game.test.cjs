@@ -262,7 +262,7 @@ test('restarting resets mission, lives, ammunition, elapsed time, entities, and 
   h.window.emit('keydown', { key: 'w' });
   h.game.pause(); h.game.start();
   assert.deepEqual(json(h.game.snapshot()), { status: 'playing', kills: 0, target: 10000,
-    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 4.5 / 0.105, spawnRate: 4.5 / 1.02 });
+    health: 5, maxHealth: 5, bombs: 3, sector: 1, score: 0, elapsed: 0, combo: 0, overdrive: 1, fireRate: 2 / 0.105, spawnRate: 2 / 1.02 });
   assert.equal(h.game.enemies.length + h.game.bullets.length + h.game.enemyBullets.length, 0);
   assert.equal(h.game.keys.size, 0);
   assert.equal(h.game.pointer, null);
@@ -297,12 +297,12 @@ test('actual firing and waves double every 2000 kills, including multiple volley
   }
   assert(samples[1].volleys / samples[0].volleys > 1.8);
   assert(samples[2].volleys / samples[1].volleys > 1.8);
-  assert(samples[4].volleys / samples[0].volleys > 20);
-  assert(samples[4].enemies / samples[0].enemies > 18);
+  assert(samples[4].volleys / samples[0].volleys > 7);
+  assert(samples[4].enemies / samples[0].enemies > 6);
   assert(samples[4].volleys > 120, 'must fire multiple times in one frame');
 });
 
-test('sectors change every 1000 kills; late-game entities remain finite without count caps', () => {
+test('sectors change every 1000 kills; late-game entities remain finite within restored budgets', () => {
   const h = setup(); h.game.start(); h.quiet(); h.game.kills = 999;
   h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
   assert.equal(h.game.sector, 2);
@@ -312,33 +312,35 @@ test('sectors change every 1000 kills; late-game entities remain finite without 
   for (let i = 0; i < 300 && h.game.status === 'playing'; i++) {
     h.game.player.x = 240 + Math.sin(i / 45) * 195;
     h.frame();
-    exceededFormerCeiling ||= h.game.enemies.length > 480 || h.game.bullets.length > 2400 ||
-      h.game.particles.length > 2400 || h.game.rings.length > 96;
+    assert(h.game.enemies.length <= 96);
+    assert(h.game.bullets.length <= 320);
+    assert(h.game.particles.length <= 480);
+    assert(h.game.rings.length <= 24);
     assert(h.game.enemies.every(e => Number.isFinite(e.x) && Number.isFinite(e.y)));
   }
   assert(h.game.kills > 9000);
-  assert(exceededFormerCeiling, 'at least one former simultaneous-entity ceiling must be exceeded');
+  
   h.game.destroy();
 });
 
-test('waves continue beyond the former 480-enemy ceiling without invalid coordinates', () => {
+test('waves stop at the restored enemy ceiling without invalid coordinates', () => {
   const h = setup(); h.game.start();
-  h.game.enemies = Array.from({ length: 479 }, () => enemy());
+  h.game.enemies = Array.from({ length: 95 }, () => enemy());
   h.game._spawnWave();
-  assert.equal(h.game.enemies.length, 485);
+  assert.equal(h.game.enemies.length, 96);
   assert(h.game.enemies.every(e => Number.isFinite(e.x)));
   h.game.destroy();
 });
 
-test('initial volleys, formation frequency and enemy travel are 4.5 times the original baseline with continuous time acceleration', () => {
+test('initial volleys, formation frequency and enemy travel are twice the original baseline with continuous time acceleration', () => {
   const h = setup(); h.game.start();
   let bullets = 0;
   for (let i = 0; i < 120; i++) {
     h.game.bullets.length = 0; h.game.enemies.length = 0; h.frame(); bullets += h.game.bullets.length;
   }
-  assert(bullets / 3 >= 87 && bullets / 3 <= 91, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
-  assert.equal(h.game.wave, 9);
-  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 472.5 : 369)));
+  assert(bullets / 3 >= 37 && bullets / 3 <= 41, `volleys: ${bullets / 3}, kills: ${h.game.kills}`);
+  assert.equal(h.game.wave, 4);
+  assert(h.game.enemies.every(e => e.speed === (e.type === 1 ? 210 : 164)));
   const e = enemy({ speed: 369 });
   h.game.enemies = [e]; h.quiet();
   h.game.timeBoost = 0;
@@ -368,14 +370,14 @@ test('idle effects are subtle, kills double the prior burst, and quiet flight se
   assert(h.game._effectProfile().bloom < 0.03);
   h.game.start(); h.quiet();
   h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
-  assert.equal(h.game.particles.length, 120, 'previous standard kill emitted 60 sparks');
+  assert.equal(h.game.particles.length, 15);
   assert(h.game._effectProfile().strength > 11);
   assert(h.game._effectProfile().bloom > 0.33);
   for (let i = 0; i < 120; i++) h.frame();
   assert(h.game._effectProfile().strength < 1);
   assert.equal(h.game.particles.length, 0);
   h.game.bomb();
-  assert(h.game._effectProfile().strength > 50);
+  assert(h.game._effectProfile().strength > 40);
   h.game.pause();
   assert(h.game._effectProfile().strength < 1);
   h.game.start();

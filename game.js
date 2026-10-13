@@ -4,7 +4,7 @@
 
   const TAU = Math.PI * 2;
   const TARGET = 10000;
-  const BASE_SPEED = 4.5;
+  const BASE_SPEED = 2;
   const WIDTH = 480;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const random = (low, high) => low + Math.random() * (high - low);
@@ -110,7 +110,7 @@
         status: this.status, kills: this.kills, target: TARGET,
         health: this.health, maxHealth: this.maxHealth, bombs: this.bombs,
         sector: this.sector, score: this.score, elapsed: this.elapsed, combo: this.combo,
-        overdrive: this._pace(), fireRate: BASE_SPEED * this._pace() / 0.105, spawnRate: BASE_SPEED * this._pace() / 1.02
+        overdrive: this._pace(), fireRate: BASE_SPEED * Math.min(8, this._pace()) / 0.105, spawnRate: BASE_SPEED * Math.min(8, this._pace()) / 1.02
       };
     }
 
@@ -150,7 +150,7 @@
       if (this.status !== 'playing' || this.bombs <= 0) return false;
       this.bombs--;
       this.bombPulse = 1;
-      this.shake = 18;
+      this.shake = 4;
       this.impact = 1;
       this.enemyBullets.length = 0;
       this.invulnerability = Math.max(this.invulnerability, 1.1);
@@ -271,13 +271,13 @@
       this.player.bank += (horizontal - this.player.bank) * Math.min(1, dt * 10);
 
       this.shotTimer -= dt;
-      const pace = BASE_SPEED * this._pace();
+      const pace = BASE_SPEED * Math.min(8, this._pace());
       while (this.shotTimer <= 0) {
         this.shotTimer += 0.105 / pace;
         this._fire();
       }
       this.spawnTimer -= dt;
-      while (this.spawnTimer <= 0) {
+      while (this.spawnTimer <= 0 && this.enemies.length < 96) {
         this._spawnWave();
         this.spawnTimer += 1.02 / pace;
       }
@@ -292,7 +292,7 @@
         if (enemy.dead) continue;
         enemy.previousY = enemy.y;
         enemy.age += dt;
-        enemy.y += enemy.speed * this._pace() * dt;
+        enemy.y += enemy.speed * Math.min(8, this._pace()) * dt;
         enemy.x = clamp(enemy.baseX + Math.sin(enemy.age * enemy.swayRate + enemy.phase) * enemy.sway, 16, WIDTH - 16);
         enemy.hit = Math.max(0, enemy.hit - dt);
         if (enemy.y > this.height + 45) enemy.dead = true;
@@ -370,6 +370,7 @@
 
     _fire() {
       const lanes = 3 + 2 * Math.min(4, Math.floor(this.kills / 1000));
+      if (this.bullets.length + lanes > 320) return;
       const spread = Array.from({ length: lanes }, (_, i) => (i - (lanes - 1) / 2) * 0.075);
       for (const angle of spread) {
         this.bullets.push({ x: this.player.x + angle * 70, y: this.player.y - 19, vx: Math.sin(angle) * 710, vy: -Math.cos(angle) * 710, dead: false });
@@ -379,7 +380,7 @@
 
     _spawnWave() {
       const pattern = this.wave++ % 5;
-      const count = pattern === 3 ? 8 : 6;
+      const count = Math.min(pattern === 3 ? 8 : 6, Math.max(0, 96 - this.enemies.length));
       const offset = random(-20, 20);
       for (let i = 0; i < count; i++) {
         const type = (this.wave + i) % 9 === 0 ? 2 : ((this.wave + i) % 3 === 0 ? 1 : 0);
@@ -403,6 +404,7 @@
     }
 
     _enemyFire() {
+      if (this.enemyBullets.length > 61) return;
       const candidates = this.enemies.filter(enemy => !enemy.dead && enemy.y > 20 && enemy.y < this.height * 0.65 && enemy.y < this.player.y - 80);
       if (!candidates.length) return;
       const enemy = candidates[Math.floor(Math.random() * candidates.length)];
@@ -427,11 +429,11 @@
       this.comboTimer = 2.8;
       this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.floor(this.combo / 25));
       this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
-      this.shake = Math.min(24, this.shake + (enemy.type === 2 ? 8 : 2.8));
-      this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
-      if (this.combo % 25 === 0) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
+      this.shake = Math.min(4, this.shake + (enemy.type === 2 ? 8 : 2.8));
+      if (this.rings.length < 24) this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
+      if (this.combo % 25 === 0 && this.popups.length < 12) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
       if (!fromBomb) this._tone('hit');
-      if (this.kills % 45 === 0) {
+      if (this.kills % 45 === 0 && this.pickups.length < 5) {
         this.pickups.push({ x: clamp(enemy.x, 35, WIDTH - 35), y: Math.max(20, enemy.y), age: 0, dead: false });
       }
       if (this.kills % 100 === 0) {
@@ -440,7 +442,7 @@
         if (this.kills < TARGET && this.kills % 1000 === 0) {
           this._event('sector', `OVERDRIVE ×${this._pace().toFixed(1)} · SECTOR ${this.sector}`);
           this.bombPulse = 0.6;
-          this.popups.push({ x: WIDTH / 2, y: this.height * 0.4, text: 'OVERDRIVE UP!', life: 1.7, color: COLORS.cyan });
+          if (this.popups.length < 12) this.popups.push({ x: WIDTH / 2, y: this.height * 0.4, text: 'OVERDRIVE UP!', life: 1.7, color: COLORS.cyan });
           this._tone('sector');
         }
       }
@@ -454,7 +456,7 @@
       this.invulnerability = 2.2;
       this.combo = 0;
       this.comboTimer = 0;
-      this.shake = 14;
+      this.shake = 3;
       this.flash = 0.16;
       this._sparks(this.player.x, this.player.y, COLORS.white, 24, 160);
       this._tone('damage');
@@ -483,7 +485,7 @@
 
     _sparks(x, y, color, count, speed) {
       this.impact = Math.max(this.impact, Math.min(1, count / 24));
-      for (let i = 0; i < count * 2; i++) {
+      for (let i = 0; i < Math.min(Math.ceil(count / 4), Math.max(0, 480 - this.particles.length)); i++) {
         const angle = random(0, TAU);
         const velocity = random(speed * 0.5, speed * 2);
         const life = random(0.3, 0.85);
@@ -587,7 +589,7 @@
         ctx.strokeRect(0, 0, WIDTH, this.height);
       }
       this._drawFrame(ctx);
-      if (!this.onEffects) this._drawChromaticAberration(ctx);
+      // Chromatic post-processing disabled in the low-load default.
     }
 
     _effectProfile() {
