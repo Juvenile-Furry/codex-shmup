@@ -49,6 +49,6 @@ All visual and audio assets are generated locally. The game makes no external re
 
 The 10,000-kill goal, drag movement and automatic firing remain. Enemies have no simultaneous-count ceiling. Formation spawning is doubled from the previous release (about 3.92 waves/sec initially); the other speed settings are unchanged. Keyboard movement is 945 world units/sec, three times its previous speed, with normalized diagonal movement. Touch drag sensitivity is unchanged.
 
-Each enemy kill triggers 0.22 seconds of RGB separation inside the game canvas. Quiet frames skip the compositor entirely. Bloom, full-page effects, camera shake, explosion rings, long particle trails and nova screen flashes are disabled. Kills emit three simple sparks, with a total budget of 96. Player bullets remain capped at 320, enemy bullets at 64, pickups at five and chain popups at twelve.
+Each enemy kill triggers 0.05 seconds of RGB separation at three times the previous amplitude inside the game canvas. Quiet frames skip the compositor entirely. Bloom, full-page effects, camera shake, explosion rings, long particle trails and nova screen flashes are disabled. Kills emit three simple sparks, with a total budget of 96. Player bullets remain capped at 320, enemy bullets at 64, pickups at five and chain popups at twelve.
 
-Time adds 0.01x every 0.3 seconds. Kill bonuses stay additive and effective game speed remains capped at 8x. Run tests with node --test tests/game.test.cjs.
+Time adds 0.01x every 0.3 seconds. Every 2,000 kills doubles the current multiplier, including time-earned gains and effective game speed remains capped at 8x. Run tests with node --test tests/game.test.cjs.

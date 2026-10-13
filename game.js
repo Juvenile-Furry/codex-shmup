@@ -422,11 +422,10 @@
       if (enemy.dead || this.status !== 'playing' || this.kills >= TARGET) return false;
       enemy.dead = true;
       this.kills++;
-      this.killPulse = 0.22;
-      // Milestone differences are added to earned speed, never assigned as a cap.
-      if (this.kills % 1000 === 0) {
-        const level = this.kills / 1000;
-        this.killBoost += 2 ** (level / 2) - 2 ** ((level - 1) / 2);
+      this.killPulse = 0.05;
+      // Add the current total to itself, including speed earned through time.
+      if (this.kills % 2000 === 0) {
+        this.killBoost += this._pace();
       }
       this.combo++;
       this.comboTimer = 2.8;
@@ -557,7 +556,7 @@
 
     _effectProfile() {
       const active = this.status !== 'ready' && this.status !== 'paused';
-      const strength = active ? Math.min(1, this.killPulse / 0.22) * (this.reducedMotion ? 0.8 : 8) : 0;
+      const strength = active ? Math.min(1, this.killPulse / 0.05) * (this.reducedMotion ? 2.4 : 24) : 0;
       return { strength, bloom: 0, echo: 0 };
     }
 
