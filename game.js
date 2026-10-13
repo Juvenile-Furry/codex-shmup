@@ -297,7 +297,6 @@
         enemy.y += enemy.speed * this._pace() * dt;
         enemy.x = clamp(enemy.baseX + Math.sin(enemy.age * enemy.swayRate + enemy.phase) * enemy.sway, 16, WIDTH - 16);
         enemy.hit = Math.max(0, enemy.hit - dt);
-        if (enemy.y > this.height + 45) enemy.dead = true;
         if (enemy.y > 0 && (this._touches(enemy, this.player, enemy.r + this.player.r) ||
             (Math.abs(enemy.x - this.player.x) < enemy.r + this.player.r && enemy.previousY <= this.player.y && enemy.y >= this.player.y))) {
           this._damagePlayer();
@@ -319,7 +318,8 @@
         for (let b = Math.max(0, bucket - 1); b <= Math.min(15, bucket + 1); b++) nearby.push(...buckets[b]);
         for (const enemy of nearby) {
           if (enemy.dead || enemy.y < -18 || Math.abs(bullet.x - enemy.x) > enemy.r + 4) continue;
-          if (this._touches(bullet, enemy, enemy.r + 4)) {
+          if (this._touches(bullet, enemy, enemy.r + 4) ||
+              (enemy.previousY <= bullet.y - bullet.vy * dt && enemy.y >= bullet.y)) {
             bullet.dead = true;
             enemy.hp--;
             enemy.hit = 0.075;
@@ -360,7 +360,7 @@
         }
         if (pickup.y > this.height + 20) pickup.dead = true;
       }
-      this.enemies = this.enemies.filter(item => !item.dead);
+      this.enemies = this.enemies.filter(item => !item.dead && item.y <= this.height + 45);
       this.bullets = this.bullets.filter(item => !item.dead);
       this.enemyBullets = this.enemyBullets.filter(item => !item.dead);
       this.pickups = this.pickups.filter(item => !item.dead);
@@ -426,7 +426,7 @@
       if (this.rings.length >= 24) this.rings.shift();
       this.rings.push({ x: enemy.x, y: enemy.y, radius: 4, life: 0.22, color: enemy.color });
       // Add the current total to itself, including speed earned through time.
-      if (this.kills % 2000 === 0) {
+      if (this.kills % 1000 === 0) {
         this.killBoost += this._pace();
       }
       this.combo++;
@@ -536,12 +536,34 @@
         for (const enemy of this.enemies) if (!enemy.dead) this._drawEnemy(ctx, enemy);
         if (this.status !== 'gameover') this._drawPlayer(ctx, this.player.x, this.player.y, this.player.bank);
       }
-      ctx.lineWidth = 1;
+      ctx.globalCompositeOperation = 'lighter';
       for (const ring of this.rings) {
-        ctx.globalAlpha = Math.max(0, ring.life / 0.22) * 0.65;
+        const fade = Math.max(0, ring.life / 0.22);
+        const radius = ring.radius;
+        // Layered strokes give the ring a luminous edge without a blur pass.
+        ctx.globalAlpha = fade * 0.16;
         ctx.strokeStyle = ring.color;
-        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius, 0, TAU); ctx.stroke();
+        ctx.lineWidth = 5 * fade + 1;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, radius, 0, TAU); ctx.stroke();
+        ctx.globalAlpha = fade * 0.9;
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.strokeStyle = COLORS.white;
+        ctx.globalAlpha = fade * 0.7;
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, radius * 0.72, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = ring.color;
+        ctx.globalAlpha = fade * 0.6;
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+          const angle = i * TAU / 4 + Math.PI / 4;
+          const dx = Math.cos(angle), dy = Math.sin(angle);
+          ctx.moveTo(ring.x + dx * radius * 1.1, ring.y + dy * radius * 1.1);
+          ctx.lineTo(ring.x + dx * (radius * 1.1 + 6 * fade), ring.y + dy * (radius * 1.1 + 6 * fade));
+        }
+        ctx.stroke();
       }
+      ctx.globalCompositeOperation = 'source-over';
       for (const particle of this.particles) {
         ctx.globalAlpha = particle.life / particle.maxLife;
         ctx.fillStyle = particle.color;

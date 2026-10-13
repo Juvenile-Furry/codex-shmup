@@ -281,10 +281,10 @@ test('destroy cancels animation and unregisters input handlers', () => {
   }
 });
 
-test('actual firing and waves double every 2000 kills, including multiple volleys per frame', () => {
+test('actual firing and waves double every 1000 kills, including multiple volleys per frame', () => {
   const samples = [];
-  for (const kills of [0, 2000, 4000, 8000, 9999]) {
-    const h = setup(); h.game.start(); h.game.kills = kills; h.game.killBoost = 2 ** Math.floor(kills / 2000) - 1;
+  for (const kills of [0, 1000, 2000, 3000, 4000]) {
+    const h = setup(); h.game.start(); h.game.kills = kills; h.game.killBoost = 2 ** Math.floor(kills / 1000) - 1;
     let bullets = 0, enemies = 0;
     for (let i = 0; i < 120; i++) {
       h.game.enemies.length = h.game.bullets.length = 0;
@@ -306,7 +306,7 @@ test('sectors change every 1000 kills; late-game entities remain finite within r
   const h = setup(); h.game.start(); h.quiet(); h.game.kills = 999;
   h.game.enemies = [enemy()]; h.game.bullets = [shot(120, 120)]; h.frame();
   assert.equal(h.game.sector, 2);
-  h.game.kills = 9000; h.game.killBoost = 15; h.game.sector = 10; h.game.spawnTimer = h.game.shotTimer = 0;
+  h.game.kills = 9000; h.game.killBoost = 511; h.game.sector = 10; h.game.spawnTimer = h.game.shotTimer = 0;
   h.game.invulnerability = 100;
   for (let i = 0; i < 300 && h.game.status === 'playing'; i++) {
     h.game.player.x = 240 + Math.sin(i / 45) * 195;
@@ -438,17 +438,25 @@ test('speed above 8x continues increasing actual fire, spawning and enemy moveme
   assert(samples[1].waves > samples[0].waves);
 });
 
-test('every 2000 kills doubles current speed including time gains', () => {
+test('fast enemies crossing a bullet are hit before offscreen cleanup', () => {
+  const h = setup(); h.game.start(); h.quiet(); h.game.killBoost = 511;
+  h.game.enemies = [enemy({ x: 120, baseX: 120, y: -40, speed: 164 })];
+  h.game.bullets = [shot(120, 300)];
+  h.game._update(1 / 60);
+  assert.equal(h.game.kills, 1);
+  assert.equal(h.game.enemies.length, 0);
+  h.game.destroy();
+});
+
+test('every 1000 kills doubles current speed including time gains', () => {
   const h = setup(); h.game.start(); h.game.timeBoost = 2;
+  h.game.kills = 998; h.game._killEnemy(enemy(), false);
+  assert.equal(h.game._pace(), 3, 'no change before the milestone');
   h.game.kills = 999; h.game._killEnemy(enemy(), false);
-  assert.equal(h.game._pace(), 3, '1000 kills does not change speed');
-  h.game.kills = 1999; h.game._killEnemy(enemy(), false);
   assert.equal(h.game._pace(), 6, 'current 3x doubles to 6x');
   h.quiet(); h.game._update(0.3);
   assert.equal(h.game._pace(), 6.01, 'subsequent time ticks still add 0.01x');
-  h.game.kills = 2999; h.game._killEnemy(enemy(), false);
-  assert.equal(h.game._pace(), 6.01, '3000 kills does not change speed');
-  h.game.kills = 3999; h.game._killEnemy(enemy(), false);
+  h.game.kills = 1999; h.game._killEnemy(enemy(), false);
   assert.equal(h.game._pace(), 12.02, 'next milestone doubles the updated total');
   h.game.combo = 224;
   const score = h.game.score;
