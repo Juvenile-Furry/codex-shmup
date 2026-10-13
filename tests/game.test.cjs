@@ -370,7 +370,9 @@ test('only kills trigger brief canvas chroma; other effects stay minimal', () =>
   assert.equal(h.game._effectProfile().strength, 0, 'empty nova must not trigger kill chroma');
   h.game._killEnemy(enemy(), false);
   assert.equal(h.game.particles.length, 3);
-  assert.equal(h.game.rings.length, 0);
+  assert.equal(h.game.rings.length, 1);
+  assert.equal(h.game.rings[0].x, enemy().x);
+  assert.equal(h.game.rings[0].y, enemy().y);
   assert.equal(h.game._effectProfile().strength, 24);
   h.game.pause(); assert.equal(h.game._effectProfile().strength, 0);
   h.game.resume();
@@ -378,6 +380,9 @@ test('only kills trigger brief canvas chroma; other effects stay minimal', () =>
   assert.equal(h.game._effectProfile().strength, 12);
   h.game._updateEffects(0.025);
   assert.equal(h.game._effectProfile().strength, 0);
+  assert(h.game.rings[0].radius > 4);
+  h.game._updateEffects(0.18);
+  assert.equal(h.game.rings.length, 0);
   h.game.start(); assert.equal(h.game.killPulse, 0);
   h.game.destroy();
 });
@@ -410,6 +415,27 @@ test('time adds exactly 0.01x every 0.3 seconds, freezes on pause and resets on 
   assert.equal(h.game.timeBoostTimer, 0);
   assert.equal(h.game.killBoost, 0);
   h.game.destroy();
+});
+
+test('speed above 8x continues increasing actual fire, spawning and enemy movement', () => {
+  const samples = [];
+  for (const pace of [16, 32]) {
+    const h = setup(); h.game.start(); h.game.killBoost = pace - 1;
+    h.game.spawnTimer = h.game.shotTimer = 0;
+    h.game._update(0.03);
+    samples.push({ bullets: h.game.bullets.length, waves: h.game.wave });
+    assert.equal(h.game.snapshot().fireRate, 2 * pace / 0.105);
+    assert.equal(h.game.snapshot().spawnRate, 4 * pace / 1.02);
+    h.quiet();
+    h.game.bullets.length = 0;
+    const target = enemy({ x: 40, y: 100, speed: 100 });
+    h.game.enemies = [target];
+    h.game._update(0.01);
+    assert.equal(target.y, 100 + pace);
+    h.game.destroy();
+  }
+  assert(samples[1].bullets > samples[0].bullets);
+  assert(samples[1].waves > samples[0].waves);
 });
 
 test('every 2000 kills doubles current speed including time gains', () => {

@@ -112,7 +112,7 @@
         status: this.status, kills: this.kills, target: TARGET,
         health: this.health, maxHealth: this.maxHealth, bombs: this.bombs,
         sector: this.sector, score: this.score, elapsed: this.elapsed, combo: this.combo,
-        overdrive: this._pace(), fireRate: BASE_SPEED * Math.min(8, this._pace()) / 0.105, spawnRate: SPAWN_FACTOR * BASE_SPEED * Math.min(8, this._pace()) / 1.02
+        overdrive: this._pace(), fireRate: BASE_SPEED * this._pace() / 0.105, spawnRate: SPAWN_FACTOR * BASE_SPEED * this._pace() / 1.02
       };
     }
 
@@ -273,7 +273,7 @@
       this.player.bank += (horizontal - this.player.bank) * Math.min(1, dt * 10);
 
       this.shotTimer -= dt;
-      const pace = BASE_SPEED * Math.min(8, this._pace());
+      const pace = BASE_SPEED * this._pace();
       while (this.shotTimer <= 0) {
         this.shotTimer += 0.105 / pace;
         this._fire();
@@ -294,7 +294,7 @@
         if (enemy.dead) continue;
         enemy.previousY = enemy.y;
         enemy.age += dt;
-        enemy.y += enemy.speed * Math.min(8, this._pace()) * dt;
+        enemy.y += enemy.speed * this._pace() * dt;
         enemy.x = clamp(enemy.baseX + Math.sin(enemy.age * enemy.swayRate + enemy.phase) * enemy.sway, 16, WIDTH - 16);
         enemy.hit = Math.max(0, enemy.hit - dt);
         if (enemy.y > this.height + 45) enemy.dead = true;
@@ -423,6 +423,8 @@
       enemy.dead = true;
       this.kills++;
       this.killPulse = 0.05;
+      if (this.rings.length >= 24) this.rings.shift();
+      this.rings.push({ x: enemy.x, y: enemy.y, radius: 4, life: 0.22, color: enemy.color });
       // Add the current total to itself, including speed earned through time.
       if (this.kills % 2000 === 0) {
         this.killBoost += this._pace();
@@ -508,6 +510,11 @@
         particle.life -= dt;
       }
       this.particles = this.particles.filter(particle => particle.life > 0);
+      for (const ring of this.rings) {
+        ring.radius += dt * (this.reducedMotion ? 40 : 100);
+        ring.life -= dt;
+      }
+      this.rings = this.rings.filter(ring => ring.life > 0);
       for (const popup of this.popups) { popup.y -= dt * 35; popup.life -= dt; }
       this.popups = this.popups.filter(popup => popup.life > 0);
     }
@@ -528,6 +535,12 @@
         this._drawBullets(ctx);
         for (const enemy of this.enemies) if (!enemy.dead) this._drawEnemy(ctx, enemy);
         if (this.status !== 'gameover') this._drawPlayer(ctx, this.player.x, this.player.y, this.player.bank);
+      }
+      ctx.lineWidth = 1;
+      for (const ring of this.rings) {
+        ctx.globalAlpha = Math.max(0, ring.life / 0.22) * 0.65;
+        ctx.strokeStyle = ring.color;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius, 0, TAU); ctx.stroke();
       }
       for (const particle of this.particles) {
         ctx.globalAlpha = particle.life / particle.maxLife;
