@@ -344,46 +344,24 @@ test('initial spawning is doubled again while firing and enemy travel retain the
   h.game.timeBoost = 0;
   const y = e.y;
   for (let i = 0; i < 60; i++) h.frame();
-  assert(e.y - y > 375 && e.y - y < 376);
+  assert(e.y - y > 372 && e.y - y < 373);
   h.game.destroy();
 });
 
-test('RGB compositor separates all three color channels on resized reusable surfaces', () => {
-  const h = setup();
-  h.game.start(); h.game._killEnemy(enemy(), false);
-  const colors = [], offsets = [];
-  h.game.channelCtx = { drawImage() {}, fillRect() { colors.push(this.fillStyle); } };
-  h.game.sceneCtx = { drawImage() {} };
-  const ctx = { save() {}, restore() {}, fillRect() {}, drawImage(source, x) { if (source === h.game.channelCanvas) offsets.push(x); } };
-  h.game._drawChromaticAberration(ctx);
-  assert.deepEqual(colors, ['#ff0000', '#00ff00', '#0000ff']);
-  assert(offsets[0] < 0 && offsets[1] === 0 && offsets[2] > 0);
-  assert.equal(h.game.sceneCanvas.width, h.canvas.width);
-  assert.equal(h.game.channelCanvas.height, h.canvas.height);
-  h.game.destroy();
-});
-
-test('only kills trigger brief canvas chroma; other effects stay minimal', () => {
+test('rich kill rings expand, expire and stay within 24 without RGB compositing', () => {
   const h = setup(); h.game.start(); h.quiet();
-  assert.equal(h.game._effectProfile().strength, 0);
-  h.game.bomb();
-  assert.equal(h.game._effectProfile().strength, 0, 'empty nova must not trigger kill chroma');
-  h.game._killEnemy(enemy(), false);
-  assert.equal(h.game.particles.length, 3);
-  assert.equal(h.game.rings.length, 1);
+  let copies = 0;
+  h.game.ctx.drawImage = () => copies++;
+  for (let i = 0; i < 30; i++) h.game._killEnemy(enemy(), false);
+  assert.equal(h.game.rings.length, 24);
   assert.equal(h.game.rings[0].x, enemy().x);
   assert.equal(h.game.rings[0].y, enemy().y);
-  assert.equal(h.game._effectProfile().strength, 24);
-  h.game.pause(); assert.equal(h.game._effectProfile().strength, 0);
-  h.game.resume();
-  h.game._updateEffects(0.025);
-  assert.equal(h.game._effectProfile().strength, 12);
-  h.game._updateEffects(0.025);
-  assert.equal(h.game._effectProfile().strength, 0);
-  assert(h.game.rings[0].radius > 4);
-  h.game._updateEffects(0.18);
+  h.game._updateEffects(0.25);
+  assert.equal(h.game.rings[0].radius, 57.5);
+  h.game._draw();
+  assert.equal(copies, 0);
+  h.game._updateEffects(0.25);
   assert.equal(h.game.rings.length, 0);
-  h.game.start(); assert.equal(h.game.killPulse, 0);
   h.game.destroy();
 });
 
@@ -431,7 +409,7 @@ test('speed above 8x continues increasing actual fire, spawning and enemy moveme
     const target = enemy({ x: 40, y: 100, speed: 100 });
     h.game.enemies = [target];
     h.game._update(0.01);
-    assert.equal(target.y, 100 + pace);
+    assert.equal(target.y, 100 + Math.sqrt(pace));
     h.game.destroy();
   }
   assert(samples[1].bullets > samples[0].bullets);
@@ -439,7 +417,7 @@ test('speed above 8x continues increasing actual fire, spawning and enemy moveme
 });
 
 test('fast enemies crossing a bullet are hit before offscreen cleanup', () => {
-  const h = setup(); h.game.start(); h.quiet(); h.game.killBoost = 511;
+  const h = setup(); h.game.start(); h.quiet(); h.game.killBoost = 512 ** 2 - 1;
   h.game.enemies = [enemy({ x: 120, baseX: 120, y: -40, speed: 164 })];
   h.game.bullets = [shot(120, 300)];
   h.game._update(1 / 60);

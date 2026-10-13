@@ -17,11 +17,6 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d', { alpha: false });
       if (!this.ctx) throw new Error('Your browser does not support Canvas 2D.');
-      // Reuse two GPU-backed surfaces for real RGB channel separation; no pixel readback.
-      this.sceneCanvas = document.createElement('canvas');
-      this.channelCanvas = document.createElement('canvas');
-      this.sceneCtx = this.sceneCanvas.getContext('2d');
-      this.channelCtx = this.channelCanvas.getContext('2d');
       this.onUpdate = typeof onUpdate === 'function' ? onUpdate : () => {};
       this.onEvent = typeof onEvent === 'function' ? onEvent : () => {};
       this.onEffects = typeof onEffects === 'function' ? onEffects : null;
@@ -94,7 +89,6 @@
       this.flash = 0;
       this.bombPulse = 0;
       this.impact = 0;
-      this.killPulse = 0;
       this.player = { x: WIDTH / 2, y: this.height * 0.82, r: 8, bank: 0 };
       this.enemies.length = 0;
       this.bullets.length = 0;
@@ -183,10 +177,6 @@
       this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
       this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
       this.scale = this.canvas.width / WIDTH;
-      for (const surface of [this.sceneCanvas, this.channelCanvas]) {
-        surface.width = this.canvas.width;
-        surface.height = this.canvas.height;
-      }
       if (this.player) this.player.y = clamp(this.player.y / oldHeight * this.height, 40, this.height - 28);
       this._draw();
     }
@@ -294,7 +284,7 @@
         if (enemy.dead) continue;
         enemy.previousY = enemy.y;
         enemy.age += dt;
-        enemy.y += enemy.speed * this._pace() * dt;
+        enemy.y += enemy.speed * Math.sqrt(this._pace()) * dt;
         enemy.x = clamp(enemy.baseX + Math.sin(enemy.age * enemy.swayRate + enemy.phase) * enemy.sway, 16, WIDTH - 16);
         enemy.hit = Math.max(0, enemy.hit - dt);
         if (enemy.y > 0 && (this._touches(enemy, this.player, enemy.r + this.player.r) ||
@@ -422,9 +412,8 @@
       if (enemy.dead || this.status !== 'playing' || this.kills >= TARGET) return false;
       enemy.dead = true;
       this.kills++;
-      this.killPulse = 0.05;
       if (this.rings.length >= 24) this.rings.shift();
-      this.rings.push({ x: enemy.x, y: enemy.y, radius: 4, life: 0.22, color: enemy.color });
+      this.rings.push({ x: enemy.x, y: enemy.y, radius: 5, life: 0.5, maxLife: 0.5, color: enemy.color });
       // Add the current total to itself, including speed earned through time.
       if (this.kills % 1000 === 0) {
         this.killBoost += this._pace();
@@ -497,7 +486,6 @@
     }
 
     _updateEffects(dt) {
-      this.killPulse = Math.max(0, this.killPulse - dt);
       this.shake = Math.max(0, this.shake - dt * 48);
       this.impact = Math.max(0, this.impact - dt * 2.5);
       this.flash = Math.max(0, this.flash - dt);
@@ -511,7 +499,7 @@
       }
       this.particles = this.particles.filter(particle => particle.life > 0);
       for (const ring of this.rings) {
-        ring.radius += dt * (this.reducedMotion ? 40 : 100);
+        ring.radius += dt * (this.reducedMotion ? 40 : 210);
         ring.life -= dt;
       }
       this.rings = this.rings.filter(ring => ring.life > 0);
@@ -538,30 +526,26 @@
       }
       ctx.globalCompositeOperation = 'lighter';
       for (const ring of this.rings) {
-        const fade = Math.max(0, ring.life / 0.22);
-        const radius = ring.radius;
-        // Layered strokes give the ring a luminous edge without a blur pass.
-        ctx.globalAlpha = fade * 0.16;
         ctx.strokeStyle = ring.color;
-        ctx.lineWidth = 5 * fade + 1;
-        ctx.beginPath(); ctx.arc(ring.x, ring.y, radius, 0, TAU); ctx.stroke();
-        ctx.globalAlpha = fade * 0.9;
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-        ctx.strokeStyle = COLORS.white;
-        ctx.globalAlpha = fade * 0.7;
-        ctx.lineWidth = 0.8;
-        ctx.beginPath(); ctx.arc(ring.x, ring.y, radius * 0.72, 0, TAU); ctx.stroke();
-        ctx.strokeStyle = ring.color;
-        ctx.globalAlpha = fade * 0.6;
+        ctx.globalAlpha = Math.min(1, ring.life / ring.maxLife * 1.1);
+        ctx.lineWidth = 4 + ring.life * 14;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = COLORS.cyan;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.65, 0, TAU); ctx.stroke();
+        // Anamorphic flare and eight expanding impact rays.
+        ctx.fillStyle = ring.color;
+        ctx.fillRect(ring.x - ring.radius * 3, ring.y - 1.5, ring.radius * 6, 3);
         ctx.beginPath();
-        for (let i = 0; i < 4; i++) {
-          const angle = i * TAU / 4 + Math.PI / 4;
-          const dx = Math.cos(angle), dy = Math.sin(angle);
-          ctx.moveTo(ring.x + dx * radius * 1.1, ring.y + dy * radius * 1.1);
-          ctx.lineTo(ring.x + dx * (radius * 1.1 + 6 * fade), ring.y + dy * (radius * 1.1 + 6 * fade));
+        for (let i = 0; i < 8; i++) {
+          const angle = i * TAU / 8;
+          ctx.moveTo(ring.x + Math.cos(angle) * ring.radius * 0.5, ring.y + Math.sin(angle) * ring.radius * 0.5);
+          ctx.lineTo(ring.x + Math.cos(angle) * ring.radius * 2, ring.y + Math.sin(angle) * ring.radius * 2);
         }
         ctx.stroke();
+        ctx.globalAlpha = ring.life / ring.maxLife * 0.24;
+        ctx.fillStyle = ring.color;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.radius * 1.6, 0, TAU); ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
       for (const particle of this.particles) {
@@ -586,34 +570,6 @@
         ctx.strokeRect(0, 0, WIDTH, this.height);
       }
       this._drawFrame(ctx);
-      if (this.killPulse > 0 && this.status !== 'paused') this._drawChromaticAberration(ctx);
-    }
-
-    _effectProfile() {
-      const active = this.status !== 'ready' && this.status !== 'paused';
-      const strength = active ? Math.min(1, this.killPulse / 0.05) * (this.reducedMotion ? 2.4 : 24) : 0;
-      return { strength, bloom: 0, echo: 0 };
-    }
-
-    _drawChromaticAberration(ctx) {
-      if (!this.sceneCtx || !this.channelCtx) return;
-      const w = this.canvas.width, h = this.canvas.height;
-      const scene = this.sceneCtx, channel = this.channelCtx;
-      scene.globalCompositeOperation = 'copy';
-      scene.drawImage(this.canvas, 0, 0);
-      const { strength } = this._effectProfile();
-      const drift = this.reducedMotion ? 0 : Math.sin(this._visualTime * 2.3) * strength * 0.22;
-      ctx.save();
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, WIDTH, this.height);
-      for (const [color, x, y] of [['#ff0000', -strength, drift], ['#00ff00', 0, 0], ['#0000ff', strength, -drift]]) {
-        channel.globalCompositeOperation = 'copy'; channel.drawImage(this.sceneCanvas, 0, 0);
-        channel.globalCompositeOperation = 'multiply'; channel.fillStyle = color; channel.fillRect(0, 0, w, h);
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.drawImage(this.channelCanvas, x, y, WIDTH, this.height);
-      }
-      ctx.restore();
     }
 
     _drawBackground(ctx) {
