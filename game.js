@@ -7,6 +7,8 @@
   const BASE_SPEED = 2;
   const SPAWN_FACTOR = 2;
   const WIDTH = 480;
+  const SHAKE_MAX = 12;
+  const SHAKE_DECAY = SHAKE_MAX / 0.25;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const random = (low, high) => low + Math.random() * (high - low);
   const COLORS = { lime: '#d8fa78', coral: '#ff866c', cyan: '#6fdbe6', lilac: '#a7a2ff', white: '#e4f8ff' };
@@ -146,7 +148,7 @@
       if (this.status !== 'playing' || this.bombs <= 0) return false;
       this.bombs--;
       this.bombPulse = 1;
-      this.shake = 4;
+      this.shake = Math.min(SHAKE_MAX, this.shake + 9);
       this.impact = 1;
       this.enemyBullets.length = 0;
       this.invulnerability = Math.max(this.invulnerability, 1.1);
@@ -422,7 +424,7 @@
       this.comboTimer = 2.8;
       this.score += (enemy.type === 2 ? 180 : 100) * (1 + Math.floor(this.combo / 25));
       this._sparks(enemy.x, enemy.y, enemy.color, fromBomb ? 48 : 60, enemy.type === 2 ? 360 : 270);
-      this.shake = Math.min(4, this.shake + (enemy.type === 2 ? 8 : 2.8));
+      this.shake = Math.min(SHAKE_MAX, this.shake + 1.5);
       if (this.combo % 25 === 0 && this.popups.length < 12) this.popups.push({ x: enemy.x, y: Math.max(80, enemy.y), text: `${this.combo} CHAIN!`, life: 1, color: COLORS.lime });
       if (!fromBomb) this._tone('hit');
       if (this.kills % 45 === 0 && this.pickups.length < 5) {
@@ -448,7 +450,6 @@
       this.invulnerability = 2.2;
       this.combo = 0;
       this.comboTimer = 0;
-      this.shake = 3;
       this.flash = 0.16;
       this._sparks(this.player.x, this.player.y, COLORS.white, 24, 160);
       this._tone('damage');
@@ -486,7 +487,7 @@
     }
 
     _updateEffects(dt) {
-      this.shake = Math.max(0, this.shake - dt * 48);
+      this.shake = Math.max(0, this.shake - dt * SHAKE_DECAY);
       this.impact = Math.max(0, this.impact - dt * 2.5);
       this.flash = Math.max(0, this.flash - dt);
       this.bombPulse = Math.max(0, this.bombPulse - dt * 0.75);
@@ -515,8 +516,12 @@
       ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = '#09121a';
       ctx.fillRect(0, 0, WIDTH, this.height);
-      this._drawBackground(ctx);
       ctx.save();
+      if (this.shake > 0 && this.status !== 'paused' && !this.reducedMotion) {
+        ctx.translate(Math.sin(this._visualTime * 137) * this.shake,
+          Math.cos(this._visualTime * 173) * this.shake);
+      }
+      this._drawBackground(ctx);
       if (this.status === 'ready') this._drawIdle(ctx);
       else {
         for (const pickup of this.pickups) this._drawPickup(ctx, pickup);

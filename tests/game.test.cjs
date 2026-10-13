@@ -365,6 +365,27 @@ test('rich kill rings expand, expire and stay within 24 without RGB compositing'
   h.game.destroy();
 });
 
+test('kill and nova shake add together, cap at 12 and decay from the cap in 0.25s', () => {
+  const h = setup(); h.game.start(); h.quiet();
+  h.game._killEnemy(enemy(), false);
+  assert.equal(h.game.shake, 1.5);
+  h.game._killEnemy(enemy(), false);
+  assert.equal(h.game.shake, 3);
+  h.game.bomb();
+  assert.equal(h.game.shake, 12);
+  h.game._killEnemy(enemy(), false);
+  assert.equal(h.game.shake, 12);
+  h.game._updateEffects(0.125);
+  assert.equal(h.game.shake, 6);
+  h.game.pause(); h.frame();
+  assert.equal(h.game.shake, 6);
+  h.game.resume(); h.game._updateEffects(0.125);
+  assert.equal(h.game.shake, 0);
+  h.game.bomb(); assert.equal(h.game.shake, 9);
+  h.game.start(); assert.equal(h.game.shake, 0);
+  h.game.destroy();
+});
+
 test('keyboard movement is tripled with normalized diagonal movement', () => {
   const h = setup(); h.game.start(); h.quiet();
   const x = h.game.player.x;
